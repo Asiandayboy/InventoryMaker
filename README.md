@@ -12,5 +12,3 @@ InventoryMaker handles the frontend side of your inventory system. It does not d
 - **Custom Filters** – Define your own functions to filter items based on its properties
 - **Dragging** – Click and drag items between slots or containers.
 - **Swapping** – Switch items between two slots by dragging
-
-## Example
