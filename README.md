@@ -12,3 +12,7 @@ InventoryMaker is an open-source Roblox module to help developers create their o
 - **Hover Prompts** – Display item details when hovering over an item.
 - **Custom Filters** – Define your own functions to filter items based on its properties
 - **Search Bar Filter** – Instantly filter items using TextBox input
+
+## Links
+- [**Documentation**](https://inventorymaker.vercel.app/)
+- [**DevForum Post**](https://devforum.roblox.com/t/inventorymaker-a-module-to-help-you-create-your-own-inventory-system/3619173/29)
