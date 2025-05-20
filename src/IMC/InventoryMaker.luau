@@ -2,12 +2,39 @@
 --[[ InventoryMaker
 	
 	Created by: robloxdestroyer1035
-	Version: v1.0.0
-	Last Updated: 5/15/25
+	Version: v1.1.0
+	Last Updated: 5/20/25
 	
 	-----------------------------------------------------------------------------
-	InventoryMakerClient (IMC)
+	InventoryMakerClient (IMC) [IMC version: v1.1.0]
 	-----------------------------------------------------------------------------
+	v1.1.0 Update Log (5/20/25):
+		- [Bug Fix]: DraggableUI allowed multiple gui objects to be dragged at the same time
+		- [Bug Fix]: Static Context menu overflows vertically when positioned near the bottom of the screen
+		- [Bug Fix]: Static Context menu overflows on the left, even when repositioning after overflowing on the right
+		- [New Method]: Changed left click callback to activated callback
+			- LeftClickCallback --> ActivatedCallback
+			- DefineLeftClick() --> DefineActivatedCallback
+			- DefineLeftClicks() --> DefineActivatedCallbacks
+		- [New Feature]: Mobile Support TODO
+			- Mobile Controls:
+				- Touch and drag .......... dragging & stacking
+				- Long press and drag .....	splitting
+				- Double tap .............. toggle equip item
+				- Touch change ............	show hover prompt
+				- Tap .....................	toggle context menu
+			- Hover Prompt input for mobile
+				- TODO POSSIBLE BUG: input not triggering sometimes
+				- If you do encounter this bug on mobile, please LMK (or try to fix it and let me know, if u want ofc, 👍)
+			- Context menu input for mobile
+				- TODO POSSIBLE BUG: input not triggering sometimes
+				- If you do encounter this bug on mobile, please LMK (or try to fix it and let me know, if u want ofc, 👍)
+			- Modules affected:
+				- New Module: IMInput
+				- DraggableUI
+				- IMContainer
+				
+	
 	v1.0.0 Update Log:
 		- [Bug Fix]: Custom filters not automatically cleared when inventory is toggled off
 		- [Bug Fix]: Return type for .Raw() not correct
@@ -41,12 +68,6 @@
 	v0.4.5 Update Log:
 		- Unequip item if equipped item is removed with RemoveItem()
 		- New method: GetItem()
-	
-	v0.4.4 Update Log:
-		- New method: UpdateItem()
-		- DefineRenderEquippedSlot()
-		- Initalize Hotbar Keybinds array with fixed size
-		- HOTBAR_FILL_FIRST flag implemented
 		
 	-----------------------------------------------------------------------------
 	TODO-[KNOWN-BUGS]:	
@@ -61,7 +82,7 @@
 	-----------------------------------------------------------------------------
 	TODO-[POSSIBLE-FEATURES-TO-BE-ADDED]
 	- Sorting
-	- Console and Mobile support (Help is gladly accepted :D)
+	- Console support (Help is gladly accepted :D)
 	
 	-----------------------------------------------------------------------------
 	MIT License
@@ -93,6 +114,8 @@ local InventoryMaker = {
 	DEBUG_SHOW_BOUNDING_BOXES = false,
 	DEBUG_PRINT_KEYBIND_MESSAGES = false,
 	USING_IMS = false,
+	
+	DOUBLE_TAP_THRESHOLD_S = .25			-- maximum time, in seconds, between touch tap inputs to register a double-tap
 }
 
 
@@ -103,6 +126,8 @@ local Players = game:GetService("Players")
 local playerGui = (Players.LocalPlayer::Player).PlayerGui
 local camera = workspace.Camera
 
+
+local IMInput = require(script.IMInput)
 local IMContainer = require(script.IMContainer)
 local IMConstants = require(script.IMConstants)
 local IMFilter = require(script.IMFilter)
@@ -624,6 +649,7 @@ local function forceOpenHoverPrompt(props: _InventoryMakerProps, container: IMCo
 	local hoverInfo = container._HOVER_INFO
 	if not hoverInfo then setActiveSlot(props, nil) return end
 	if not hoverInfo._OPEN_HOVER_PROMPT_AFTER_DRAGGING then return end
+	if IMInput.GetInputType() ~= IMInput.INPUT_MOUSE then return end
 	
 	setActiveSlot(props, item, filledGui, draggable)
 	local prompt = IMContainer.GetHoverPromptSingleton(container, props._PARENT_CONTAINER_SCREEN_GUI)
@@ -732,10 +758,11 @@ local function closeAllContextMenusAndHoverPrompts(props: _InventoryMakerProps)
 end
 
 local function openHoveredContextMenu(props: _InventoryMakerProps, container: IMContainer.Container, menuIndex: number, boundingGui: GuiObject)
-	if props._CONTEXT_MENU_MODE ~= MULTI_CONTEXT_MENU_MODE then error("[Inventory]: Multi-context mode is require to opened a hovered context menu.") end
-	if not props._activeSlot then error("[Inventory]: No slot active to open context menu for.") end
-	if menuIndex == 1 then error("[Inventory]: The primary context menu cannot be a hovered context menu.") end
-	if #props._contextMenusStack == 0 then error("[Inventory]: The primary context menu cannot be the the first in the stack as a hovered context menu.") end
+	if IMInput.GetInputType() == IMInput.INPUT_TOUCH then error("[InventoryMaker]: Hovered context menus are disabled on mobile.") end
+	if props._CONTEXT_MENU_MODE ~= MULTI_CONTEXT_MENU_MODE then error("[InventoryMaker]: Multi-context mode is required to opened a hovered context menu.") end
+	if not props._activeSlot then error("[InventoryMaker]: No slot active to open context menu for.") end
+	if menuIndex == 1 then error("[InventoryMaker]: The primary context menu cannot be a hovered context menu.") end
+	if #props._contextMenusStack == 0 then error("[InventoryMaker]: The primary context menu cannot be the the first in the stack as a hovered context menu.") end
 	if props._contextMenusOpened[menuIndex + 1]._opened then return end
 	
 	
@@ -898,7 +925,7 @@ local function openStaticContextMenu(props: _InventoryMakerProps, container: IMC
 	local activeSlot = props._activeSlot
 	
 	if not activeSlot then error("[Inventory]: No slot active to open context menu for.") end
-	if activeSlot._draggable and DraggableUI.IsDragging(activeSlot._draggable) then warn("cannot open menu while dragging") return end
+	if activeSlot._draggable and DraggableUI.IsDragging(activeSlot._draggable) then debugWarn("cannot open menu while dragging") return end
 	
 
 	local isSingleContext = props._CONTEXT_MENU_MODE == SINGLE_CONTEXT_MENU_MODE
@@ -948,24 +975,44 @@ local function openStaticContextMenu(props: _InventoryMakerProps, container: IMC
 	
 	local menuSize = contextMenuGui.AbsoluteSize
 	local rightSideX = contextMenuPos.X.Offset + promptSize.X + menuSize.X
-	local leftAlign = rightSideX > camera.ViewportSize.X
+	local rightSideOverflow = rightSideX > camera.ViewportSize.X
 
-	if leftAlign then
-		contextMenuPos = UDim2.fromOffset(guiPos.X - menuSize.X, guiPos.Y + guiInsetY) + UDim2.fromOffset(-userOffset.X, userOffset.Y)
+	if rightSideOverflow then
+		contextMenuPos = UDim2.fromOffset(guiPos.X - menuSize.X, guiPos.Y + guiInsetY) 
+			+ UDim2.fromOffset(-userOffset.X, userOffset.Y)
 	end
+	
+	local bottomSideY = contextMenuPos.Y.Offset + menuSize.Y
+	local bottomSideOverflow = bottomSideY > camera.ViewportSize.Y
+	
+	if bottomSideOverflow then
+		contextMenuPos = UDim2.fromOffset(contextMenuPos.X.Offset, guiPos.Y + guiInsetY - menuSize.Y + guiSize.Y) 
+			+ UDim2.fromOffset(-userOffset.X, userOffset.Y)
+	end
+	
 
 	contextMenuGui.Position = contextMenuPos
 	contextMenuGui.Parent = props._PARENT_CONTAINER_SCREEN_GUI
 	
-	-- position hover prompt next to context menu on the right
+	-- position hover prompt next to context menu on the right (not overflowed) or left (overflowed)
 	if hoverInfo and props._SHOW_HOVER_PROMPT_NEXT_TO_MENU and hoverPrompt then
-		if leftAlign then
+		if rightSideOverflow then
 			hoverPrompt.Position = contextMenuPos - UDim2.new(0, promptSize.X, 0, 0) + 
 				UDim2.fromOffset(-hoverInfo._OFFSET.X.Offset, hoverInfo._OFFSET.Y.Offset)
 		else
 			hoverPrompt.Position = contextMenuPos + UDim2.new(0, contextMenuGui.AbsoluteSize.X, 0, 0) + hoverInfo._OFFSET
 		end
+		
+		if rightSideOverflow then
+			local leftSideX = hoverPrompt.Position.X.Offset
+			local leftSideOverflow = leftSideX < 0
+			if leftSideOverflow then
+				-- if the hoverprompt overflows on the left side too, position it back to the right side of the menu
+				hoverPrompt.Position = contextMenuPos + UDim2.new(0, contextMenuGui.AbsoluteSize.X, 0, 0) + hoverInfo._OFFSET
+			end
+		end
 	end
+	
 	
 	
 	local contextMenuPosX = contextMenuPos.X.Offset
@@ -1002,8 +1049,8 @@ local function openStaticContextMenu(props: _InventoryMakerProps, container: IMC
 
 	local con: RBXScriptConnection?
 	con = UIS.InputBegan:Connect(function(input, gpe)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 then
-			local mouse = UIS:GetMouseLocation()
+		if IMInput.IsInputActive(IMInput.ROOT_MENU_BOUNDS_CHECK, input) then
+			local mouse = UIS:GetMouseLocation() -- I'm not sure how, but this somehow works on mobile??
 			local px, py = mouse.X, mouse.Y - Utility.GetGuiInsetY(not insetIgnored)
 			
 			local check = false
@@ -1027,7 +1074,7 @@ local function openStaticContextMenu(props: _InventoryMakerProps, container: IMC
 		props._onFirstHoveredMenu = function()
 			local checkCon: RBXScriptConnection?
 			checkCon = UIS.InputChanged:Connect(function(input)
-				if input.UserInputType ~= Enum.UserInputType.MouseMovement then return end
+				if not IMInput.IsInputActive(IMInput.MULTI_CONTEXT_BOUNDS_CHECK, input) then return end
 				
 				hoveredContextMenuBoundingBoxesCheck(props, input, insetIgnored)
 			end)
@@ -1037,8 +1084,6 @@ local function openStaticContextMenu(props: _InventoryMakerProps, container: IMC
 			end
 		end	
 	end
-	
-	
 	
 	props._contextMenusOpened[menuIndex + 1]._cleanupFunc = function(unrenderOnly: boolean)
 		if con and con.Connected then con:Disconnect() end
@@ -1052,14 +1097,34 @@ local function openStaticContextMenu(props: _InventoryMakerProps, container: IMC
 end
 
 local function connectContextMenuEvents(props: _InventoryMakerProps, filledGui: GuiObject, item: ITEM_TYPE, draggable: DraggableUI.Draggable?, container: IMContainer.Container)
-	filledGui.InputBegan:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton2 then
-			if not props._toggled then debugPrint("Cannot open context menu while inventory is toggled off.") return end
-			if isItemActiveSlot(props, item) and areContextMenusOpened(props._contextMenusOpened) then return end
-			
-			setActiveSlot(props, item, filledGui, draggable)
-			closeContextMenuStack(props, 1)
+	local inputType = IMInput.GetInputType()
+	
+	local function openRootMenu()
+		if not props._toggled then debugPrint("Cannot open context menu while inventory is toggled off.") return end
+		if isItemActiveSlot(props, item) and areContextMenusOpened(props._contextMenusOpened) then return end
+
+		setActiveSlot(props, item, filledGui, draggable)
+		closeContextMenuStack(props, 1)
+
+		if inputType == IMInput.INPUT_TOUCH then
+			--[[ Mobile only issue:
+				Bc both the input triggers for opening the root menu and checking the root menu bounds is the same,
+				what happens is, without the task.wait(), our root menu will open and then immediately close on the same
+				frame, due to the connection we connect in openStaticContextMenu().
+				
+				Warning: Not even sure if this is a 100% guarantee reliable solution......
+			]]
+			task.wait()
 			openStaticContextMenu(props, container, 1, false) -- all PCM are static context menus in both single-context and multi-context
+		else
+			openStaticContextMenu(props, container, 1, false) -- all PCM are static context menus in both single-context and multi-context
+		end
+	end
+	
+
+	filledGui.InputBegan:Connect(function(input)
+		if IMInput.IsInputActive(IMInput.CONTEXT_MENU_OPEN, input) then
+			openRootMenu()
 		end
 	end)
 end
@@ -1073,9 +1138,10 @@ local function connectFilledSlotHoverEvents(props: _InventoryMakerProps, filledG
 	local canHotbarHover = container._name == IMConstants.CONTAINER_HOTBAR_NAME 
 		and IMContainer.IsBitFlagEnabled(container._flags, InventoryMaker.HOTBAR_UNTOGGLED_HOVER)
 	
+
 	if fixedPos then
 		filledGui.InputBegan:Connect(function(input)
-			if input.UserInputType == Enum.UserInputType.MouseMovement and not areContextMenusOpened(props._contextMenusOpened) then
+			if IMInput.IsInputActive(IMInput.HOVER_PROMPT_START, input) and not areContextMenusOpened(props._contextMenusOpened) then
 				if not props._toggled and not canHotbarHover then 
 					debugPrint("Cannot hover while inventory is toggled off.") 
 					return 
@@ -1091,7 +1157,7 @@ local function connectFilledSlotHoverEvents(props: _InventoryMakerProps, filledG
 		end)
 	else
 		filledGui.InputChanged:Connect(function(input)
-			if input.UserInputType == Enum.UserInputType.MouseMovement and not areContextMenusOpened(props._contextMenusOpened) then
+			if IMInput.IsInputActive(IMInput.HOVER_PROMPT_START, input) and not areContextMenusOpened(props._contextMenusOpened) then
 				if not props._toggled and not canHotbarHover then 
 					debugPrint("Cannot hover while inventory is toggled off.") 
 					return 
@@ -1109,7 +1175,7 @@ local function connectFilledSlotHoverEvents(props: _InventoryMakerProps, filledG
 	end
 	
 	filledGui.InputEnded:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseMovement and not areContextMenusOpened(props._contextMenusOpened) then
+		if IMInput.IsInputActive(IMInput.HOVER_PROMPT_END, input) and not areContextMenusOpened(props._contextMenusOpened) then
 			if not props._toggled and not canHotbarHover then 
 				debugPrint("Cannot hover while inventory is toggled off.") 
 				return 
@@ -1128,41 +1194,92 @@ local function connectFilledGuiEvents(props: _InventoryMakerProps, filledGui: Gu
 	local draggable = container._draggables[filledGui]
 	local screenGui = props._PARENT_CONTAINER_SCREEN_GUI
 	local stackingConfigs = props._STACKING_CONFIGS
+	local isHotbarContainer = container._name == IMConstants.CONTAINER_HOTBAR_NAME
+	local touchedEnabled = IMInput.GetInputType() == IMInput.INPUT_TOUCH
+	local mouseEnabled = IMInput.GetInputType() == IMInput.INPUT_MOUSE
+	local containerCb = container._CALLBACKS
+	
+	if touchedEnabled then
+		filledGui.Active = true
+	end
 	
 	if container._HOVER_INFO then
 		connectFilledSlotHoverEvents(props, filledGui, item, draggable, container)
 	end
 
-	if props._USER_CONTEXT_MENUS and container._name ~= IMConstants.CONTAINER_HOTBAR_NAME then
+	if props._USER_CONTEXT_MENUS and not isHotbarContainer then
 		connectContextMenuEvents(props, filledGui, item, draggable, container)
 	end
 	
+	local function equipItemToggle()
+		if props._USER_CONTEXT_MENUS and areContextMenusOpened(props._contextMenusOpened) then
+			closeContextMenuStack(props, 1)
+		end
+		setActiveSlot(props, item, filledGui, draggable)
+		setEquippedItem(props, item, filledGui, container, false)
+	end
 	
+	--[[
+		Connect double-tap event to equip an item in a nonhobar container,
+		since tap-to-equip for nonhotbar slots is disabled
+		
+		If dragging is enabled, then we only allow the double-tap for nonhotbar slots.
+		If dragging is disabled, then we also allow the double-tap for hotbar slots
+		since the single-tap functionality uses the draggable object (which will be nil
+		when dragging is disabled)
+	]]
+	if (draggable and touchedEnabled and not isHotbarContainer) or (not draggable and touchedEnabled) then
+		local lastTap = 0
+		filledGui.TouchTap:Connect(function()
+			if os.clock() - lastTap <= InventoryMaker.DOUBLE_TAP_THRESHOLD_S then
+				equipItemToggle()
+				
+				if containerCb._ACTIVATED_FUNC then
+					containerCb._ACTIVATED_FUNC(item, filledGui, getSlotIndexFromSlot(filledGui.Parent::GuiObject)::number)
+				end
+			end
+			lastTap = os.clock()
+		end)
+	end
+
+		
 	if not draggable then 
-		if not container._LEFT_CLICK_FUNC then return nil end
-			
+		if touchedEnabled then return nil end
+		
 		filledGui.InputBegan:Connect(function(input)
 			if input.UserInputType == Enum.UserInputType.MouseButton1 then
-				container._LEFT_CLICK_FUNC(getSlotIndexFromSlot(filledGui.Parent::GuiObject)::number, item, filledGui)
+				equipItemToggle()
+				
+				if containerCb._ACTIVATED_FUNC then
+					containerCb._ACTIVATED_FUNC(item, filledGui, getSlotIndexFromSlot(filledGui.Parent::GuiObject)::number)
+				end
 			end
 		end)
 		
 		return nil 
 	end
 	
+	
+	-------------------------------------------------------------
+	---------------[When container allows dragging]---------------
+	--------------------------------------------------------------
+	
 	draggable.BeforeDragStart = function()
 		local toggled = props._toggled
-		if container._name == IMConstants.CONTAINER_HOTBAR_NAME and not toggled then
+		if isHotbarContainer and not toggled then
 			setEquippedItem(props, item, filledGui, container, false)
-			if container._LEFT_CLICK_FUNC then container._LEFT_CLICK_FUNC(getSlotIndexFromSlot(filledGui.Parent::GuiObject)::number, item, filledGui) end
+			
+			-- disable left click callback on mobile since mobile does not have a left click mouse button
+			if containerCb._ACTIVATED_FUNC and mouseEnabled then 
+				containerCb._ACTIVATED_FUNC(item, filledGui, getSlotIndexFromSlot(filledGui.Parent::GuiObject)::number) 
+			end
 			return false
 		end
 		
-		if not toggled then debugPrint("Cannot drag while inventory is toggled off.") end
+		if not toggled then debugWarn("Cannot drag while inventory is toggled off.") end
 		return toggled
 	end
 	
-
 	draggable.OnDragStart = function()
 		props._dragging = true
 		setActiveSlot(props, item, filledGui, draggable)
@@ -1174,15 +1291,15 @@ local function connectFilledGuiEvents(props: _InventoryMakerProps, filledGui: Gu
 			closeContextMenuStack(props, 1)
 		end
 	end
-
+	
 	draggable.OnDragEnd = function(mousePos, guis: { GuiObject }, wasDragged: boolean)
-		if not wasDragged then			
-			if props._USER_CONTEXT_MENUS and areContextMenusOpened(props._contextMenusOpened) then
-				closeContextMenuStack(props, 1)
+		if not wasDragged then	
+			-- disable left click callback and tapping to equip on mobile for all non-hotbar slots
+			if touchedEnabled and not isHotbarContainer then return end
+			equipItemToggle()
+			if containerCb._ACTIVATED_FUNC then 
+				containerCb._ACTIVATED_FUNC(item, filledGui, getSlotIndexFromSlot(filledGui.Parent::GuiObject)::number) 
 			end
-			setActiveSlot(props, item, filledGui, draggable)
-			setEquippedItem(props, item, filledGui, container, false)
-			if container._LEFT_CLICK_FUNC then container._LEFT_CLICK_FUNC(getSlotIndexFromSlot(filledGui.Parent::GuiObject)::number, item, filledGui) end
 			return
 		end
 		
@@ -1271,14 +1388,15 @@ local function connectFilledGuiEvents(props: _InventoryMakerProps, filledGui: Gu
 	end
 	
 	DraggableUI.Enable(draggable)
-
 	
 	return draggable
 end
 
 
-
+local splittingActive = false
 local function split(props: _InventoryMakerProps, splitSlotIndex: number, currFilledGui: GuiObject)
+	if splittingActive then return end
+	
 	if props._data == nil then error("[InventoryMaker] (Internal): Data is nil") end
 	if props._currSize >= props._capacity then debugWarn("Not enough space in inventory to split.") return end
 
@@ -1293,7 +1411,11 @@ local function split(props: _InventoryMakerProps, splitSlotIndex: number, currFi
 	if not canSplit then debugPrint("Cannot perform split operation.") return end
 
 	local possibleNewItem, cancelSplitFunc = configs._SPLIT_UPDATE(currItem, Utility.DeepCopyTable(currItem::Utility.Table)::ITEM_TYPE, currFilledGui)
-
+	
+	
+	splittingActive = true
+	
+	
 	-- bc the currItem is still within the slot, we need to create a dummy filled gui
 	IMContainer.CreateDummyFilledGui(newItemContainer::IMContainer.Container, splitSlotIndex, possibleNewItem)
 
@@ -1305,9 +1427,11 @@ local function split(props: _InventoryMakerProps, splitSlotIndex: number, currFi
 		IMContainer.DestroyDummyFilledGui(newItemContainer::IMContainer.Container, splitSlotIndex)
 		currDraggable.OnDragEnd = prevOnDragEnd
 		props._dragging = false
+		
+		splittingActive = false 
 	end	
 	
-	-- override the draggable's OnDragEnd callback of the currFilledGui to use logic for splitting instead of switching and clicking
+	-- override the draggable's OnDragEnd callback of the currFilledGui to use logic for splitting instead of logic for switching and clicking
 	currDraggable.OnDragEnd = function(mousePos, guis: { GuiObject }, wasDragged: boolean)
 		if not wasDragged then
 			cancelSplitOperation()
@@ -1377,14 +1501,14 @@ local function split(props: _InventoryMakerProps, splitSlotIndex: number, currFi
 			debugPrint("New inventory size after splitting:", props._currSize)
 			currDraggable.OnDragEnd = prevOnDragEnd
 			props._dragging = false
+			
+			splittingActive = false
 
 			if IMS._CALLBACKS then
 				IMS._CALLBACKS.OnSplit(emptySlotIndex, splitSlotIndex)
 			end
 		end
 	end
-	
-
 end
 
 
@@ -1494,10 +1618,9 @@ local function enableSplitting(props: _InventoryMakerProps): RBXScriptConnection
 		return allguis
 	end
 	
-	return UIS.InputBegan:Connect(function(input, gpe)
-		if input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
-		if not UIS:IsKeyDown(Enum.KeyCode.LeftControl) then return end
-
+	local function findItemToSplit()
+		if splittingActive then return end
+		
 		local mouse = UIS:GetMouseLocation()
 
 		local guis = getFilledGuis()
@@ -1512,7 +1635,25 @@ local function enableSplitting(props: _InventoryMakerProps): RBXScriptConnection
 
 			break
 		end
-	end)
+	end
+	
+	local inputType = IMInput.GetInputType()
+	
+	if inputType == IMInput.INPUT_MOUSE then
+		return UIS.InputBegan:Connect(function(input, gpe)
+			if IMInput.IsInputActive(IMInput.SPLIT, input) then
+				findItemToSplit()
+			end
+		end)	
+	elseif inputType == IMInput.INPUT_TOUCH then
+		return UIS.TouchLongPress:Connect(function(pos, state: Enum.UserInputState)
+			if IMInput.IsInputActive(IMInput.SPLIT, state) then
+				findItemToSplit()
+			end
+		end)
+	end
+	
+	return nil
 end
 
 local function enableSearchBar(props: _InventoryMakerProps): RBXScriptConnection?
@@ -1527,7 +1668,9 @@ local function enableSearchBar(props: _InventoryMakerProps): RBXScriptConnection
 	return IMFilter.ConnectSearchBarEvent(containers, configs.SearchBarInputGui, configs.TransformTextFunc, configs.FilterFunc, props._data)
 end
 
-local function enableScrollClosing(props: _InventoryMakerProps): RBXScriptConnection
+local function enableScrollClosing(props: _InventoryMakerProps): RBXScriptConnection?
+	if IMInput.GetInputType() == IMInput.INPUT_TOUCH then return nil end
+	
 	return UIS.InputChanged:Connect(function(input, gpe)
 		if input.UserInputType ~= Enum.UserInputType.MouseWheel then return end
 		
@@ -2049,11 +2192,11 @@ function InventoryMaker.DefineFilledSlots(containers: { IMContainer.Container },
 end
 
 --[[
-	Define the same left-click callback for all provided containers 
+	Define the same activated callback for all provided containers 
 ]]
-function InventoryMaker.DefineLeftClicks(containers: { IMContainer.Container }, callback: IMContainer.LeftClickCallback)
+function InventoryMaker.DefineActivatedCallbacks(containers: { IMContainer.Container }, callback: IMContainer.ActivatedCallback)
 	for i = 1, #containers do
-		containers[i]:DefineLeftClick(callback)
+		containers[i]:DefineActivatedCallback(callback)
 	end
 end
 
@@ -2095,6 +2238,8 @@ end
 	context menu that gets opened first when right-click an inventory item. It is the first menu in the chain of context menus. 
 	The chain of contxt menus is destroyed whenn clicking out of bounds of the currently opened context menu, which closes all
 	the context menus.
+	
+	Multi-context mode is disabled on mobile. So, if you set the mode to multi-context mode, it will default to single-context mode on mobile.
 	
 	
 	GuiTemplate - the GuiObject of your context menu; create your design of what you want your context
@@ -2160,6 +2305,11 @@ function InventoryMaker.DefineContextMenus(
 	end
 	_inventoryMakerProps._SHOW_HOVER_PROMPT_NEXT_TO_MENU = showHoverPromptNextToMenu == nil and true or showHoverPromptNextToMenu::boolean
 	_inventoryMakerProps._CONTEXT_MENU_MODE = contextMode
+	
+	if IMInput.GetInputType() == IMInput.INPUT_TOUCH and contextMode == MULTI_CONTEXT_MENU_MODE then
+		debugWarn("Multi-context mode disabled on mobile; defaulting to single-context mode.")
+		_inventoryMakerProps._CONTEXT_MENU_MODE = SINGLE_CONTEXT_MENU_MODE
+	end
 end
 
 --[[
@@ -2315,6 +2465,9 @@ end
 	
 	The index refers to the array position of context menu configs you defined. For example, OpenHoveredContextMenu(2, someExampleGui) 
 	will open the second context menu that you defined in DefineContextMenus()
+	
+	If touch is enabled, multi-context mode is automatically defaulted to single-context mode, causing this function
+	to open a static context menu instead.
 ]]
 function InventoryMaker.OpenHoveredContextMenu(containerName: string, menuIndex: number, boundingGui: GuiObject)
 	-- this wait allows menus that are currently being closed to close first before a new one is opened with this method.
@@ -2322,8 +2475,12 @@ function InventoryMaker.OpenHoveredContextMenu(containerName: string, menuIndex:
 	-- concurrency issues, amirite?
 	task.wait()
 	
+	local mouseEnabled = IMInput.GetInputType() == IMInput.INPUT_MOUSE
+	
 	if not _inventoryMakerProps._activeSlot then error("[Inventory]: Must have an active slot to open a context menu.") end
-	if _inventoryMakerProps._CONTEXT_MENU_MODE ~= MULTI_CONTEXT_MENU_MODE then error("[Inventory]: Context menu mode must be multi-context to open a hovered context menu.") end
+	if _inventoryMakerProps._CONTEXT_MENU_MODE ~= MULTI_CONTEXT_MENU_MODE and mouseEnabled then 
+		error("[Inventory]: Context menu mode must be multi-context to open a hovered context menu.") 
+	end
 	if menuIndex > #_inventoryMakerProps._USER_CONTEXT_MENUS then error("[Inventory]: Menu index is out of bounds of the defined context menus.") end
 	if _inventoryMakerProps._contextMenusOpened[menuIndex+1]._opened then return end
 	if menuIndex <= 1 then error("[Inventory]: The primary context menu cannot be submenu; menuIndex be greater than 1 to open a hovered context menu.") end
@@ -2331,7 +2488,11 @@ function InventoryMaker.OpenHoveredContextMenu(containerName: string, menuIndex:
 		error("[Inventory]: Bounding gui must be a descendant of the last opened context menu template.")
 	end
 	
-	openHoveredContextMenu(_inventoryMakerProps::_InventoryMakerProps, _inventoryMakerProps._containers[containerName], menuIndex, boundingGui)
+	if mouseEnabled then 
+		openHoveredContextMenu(_inventoryMakerProps::_InventoryMakerProps, _inventoryMakerProps._containers[containerName], menuIndex, boundingGui)
+	else
+		openStaticContextMenu(_inventoryMakerProps::_InventoryMakerProps, _inventoryMakerProps._containers[containerName], menuIndex, false)
+	end
 end
 
 --[[
