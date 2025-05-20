@@ -82,7 +82,7 @@ export type _HoverPromptInfo = {
 	_OPEN_HOVER_PROMPT_AFTER_DRAGGING: boolean,
 }
 
-export type LeftClickCallback = (slotIndex: number, item: ITEM_TYPE, filledGui: GuiObject) -> ()
+export type ActivatedCallback = (item: ITEM_TYPE, filledGui: GuiObject, slotIndex: number) -> ()
 export type OnItemAddedCallback = (item: ITEM_TYPE, filledGui: GuiObject, info: ItemPositionInfo) -> ()
 export type AllowedItemsCallback = (item: ITEM_TYPE) -> boolean
 
@@ -91,7 +91,7 @@ export type Container = {
 	DefineEmptySlot: (self: Container, configs: EmptyConfigs) -> (),
 	DefineFilledSlot: (self: Container, configs: FilledConfigs) -> (),
 	DefineHoverPrompt: (self: Container, configs: HoverPromptConfigs) -> (),
-	DefineLeftClick: (self: Container, callback: LeftClickCallback) -> (),
+	DefineActivatedCallback: (self: Container, callback: ActivatedCallback) -> (),
 	SetHotbarConfigs: (self: Container, hbConfigs: HotbarConfigs) -> (),
 	DefineOnItemAddedCallback: (self: Container, callback: OnItemAddedCallback) -> (),
 	DefineAllowedItems: (self: Container, callback: AllowedItemsCallback) -> (),
@@ -121,13 +121,13 @@ export type Container = {
 	_FILLED_TEMPLATE: GuiObject,
 	_RENDER_EMPTY_FUNC: (slotIndex: number, emptyGui: GuiObject, containerIndex: number) -> (),
 	_RENDER_FILLED_FUNC: (slotIndex: number, item: ITEM_TYPE, filledGui: GuiObject, containerIndex: number) -> (),
-	_LEFT_CLICK_FUNC: LeftClickCallback,
 	_HOVER_INFO: _HoverPromptInfo?,
 	
 	
 	_CALLBACKS: {
 		_ON_ITEM_ADDED_FUNC: OnItemAddedCallback,
 		_ALLOWED_ITEMS_FUNC: AllowedItemsCallback,
+		_ACTIVATED_FUNC: ActivatedCallback, 
 	}
 }
 
@@ -342,8 +342,8 @@ function IMContainer.new(name: string, capacity: number, flags: number): Contain
 			}::_HoverPromptInfo
 		end,
 		
-		DefineLeftClick = function(self: Container, callback: LeftClickCallback)
-			self._LEFT_CLICK_FUNC = callback
+		DefineActivatedCallback = function(self: Container, callback: ActivatedCallback)
+			self._CALLBACKS._ACTIVATED_FUNC = callback
 		end,
 		
 		SetHotbarConfigs = function(self: Container, hbConfigs: HotbarConfigs)
