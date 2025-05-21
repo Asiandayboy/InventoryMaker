@@ -2,11 +2,11 @@
 --[[ InventoryMaker
 
 	Created by: robloxdestroyer1035
-	Version: v1.0.0
-	Last Updated: 5/15/25
+	Version: v1.1.0
+	Last Updated: 5/20/25
 
 	-----------------------------------------------------------------------------
-	InventoryMakerServer (IMS)
+	InventoryMakerServer (IMS) [IMS version: v1.0.0]
 	-----------------------------------------------------------------------------
 
 
