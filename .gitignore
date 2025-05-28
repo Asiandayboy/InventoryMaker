@@ -1,0 +1,12 @@
+# Project place file
+/IM-rojo.rbxlx
+
+# Roblox Studio lock files
+/*.rbxlx.lock
+/*.rbxl.lock
+
+# Rojo
+**/sourcemap.json
+
+# Wally
+WallyPackage/

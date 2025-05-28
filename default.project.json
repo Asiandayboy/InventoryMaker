@@ -1,0 +1,30 @@
+{
+  "name": "InventoryMaker",
+  "tree": {
+    "$className": "DataModel",
+
+    "Workspace": {
+      "Camera": {
+        "$className": "Camera"
+      }
+    },
+
+    "ServerScriptService": {
+
+      "ServerModules": {
+        "$path": "src/server_modules",
+        "$className": "Folder"
+      }
+    },
+
+    "StarterPlayer": {
+      "StarterPlayerScripts": {
+
+        "ClientModules": {
+          "$path": "src/client_modules",
+          "$className": "Folder"
+        }
+      }
+    }
+  }
+}
