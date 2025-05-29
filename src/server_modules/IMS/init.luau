@@ -5,12 +5,12 @@
 
 	Created by: robloxdestroyer1035
 	Version: v1.2.0
-	Last Updated: WIP
+	Last Updated: 5/29/25
 
 	-----------------------------------------------------------------------------
 	InventoryMakerServer (IMS)
 	-----------------------------------------------------------------------------
-    v1.2.0 Update Log (UNRELEASED)
+    v1.2.0 Update Log (5/29/25)
         - [New Method]: Inventory:DefineSwitchValidation()
         - [New Method]: Inventory:DefineOnSwitched()
         - [New Feature]: Sorting

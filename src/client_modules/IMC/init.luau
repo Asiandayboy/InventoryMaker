@@ -7,13 +7,13 @@
 	
 	Created by: robloxdestroyer1035
 	Version: v1.2.0 
-	Last Updated: WIP
+	Last Updated: 5/29/25
 	
 	-----------------------------------------------------------------------------
 	InventoryMakerClient (IMC)
 	-----------------------------------------------------------------------------
-    v1.2.0 Update Log (UNRELEASED)
-        - [Bug FIx]: OnSizeChanged callback not running when stacking with 0 leftovers
+    v1.2.0 Update Log (5/29/25)
+        - [Bug FIx]: OnSizeChanged callback not called when stacking with 0 leftovers
         - [New Feature]: Sorting
             - [New Method]: IMC.DefineCustomSorters()
             - [New Method]: IMC.Sort()
@@ -1962,6 +1962,9 @@ end
 	- InventoryMaker.HOTBAR_UNTOGGLED_HOVER - allows hover prompt for hotbar container when inventory is toggled off
 	- InventoryMaker.HOTBAR_COLLAPSE - allows hotbar container to hide empty slots when not at full capacity
 	- InventoryMaker.HOTHBAR_FILL_FIRST - forces hotbar to prioritize filling its slots
+    - InventoryMaker.NO_AUTO_EQUIP - prevents new items from being automatically equipped in the container
+    - InventoryMaker.NO_EQUIPPED_STATE - disables the equipped state in the container
+    - InventoryMaker.NO_SORTING - disables sorting in the container
 	
 	Combine the bit flags with the "+" operator (usually it would be done with |, but luau doesn't have that). For example:
 	
@@ -2044,6 +2047,10 @@ function InventoryMaker.Build(containers: { IMContainer._Container }, itemspace:
 	if InventoryMaker.USING_IMS and IMS._CALLBACKS == nil then
 		error("[InventoryMaker]: You must define remotes to server with InventoryMaker.IMS.DefineRemotesToServer() in order to build the inventory.")
 	end
+
+    if not _inventoryMakerProps._EQUIPPED_RENDER_FUNC then
+        error("[InventoryMaker]: You must define how an equipped item is rendered by calling .DefineRenderEquippedSlot().")
+    end
 
 	local invCapacity = _inventoryMakerProps._capacity
 	
@@ -3079,7 +3086,7 @@ end
 	The callback passes in the changed size and capacity of the inventory
 	
 	This callback gets called initially when the inventory is built with .Build(), and
-	then gets called whenever:
+	then gets called whenever the current size of the inventory changes:
 		- a new item is added
 		- an item is removed
 		- a new stack with 0 leftovers is created
@@ -3149,7 +3156,7 @@ end
 	global sort, as that would violate the purpose of containers.
 	Sorting pushes all the empty slots to the end of the container.
 	
-	Sorting is considered a destructive action, in that the effects
+	Sorting is considered a destructive operation, in that the effects
 	cannot be undone, unlike filters. 
 ]]
 function InventoryMaker.Sort(sorterName: string, ...: any)
@@ -3362,6 +3369,7 @@ InventoryMaker.IMS = {}::{
         
         OnSort: A callback that gets run when a sorter is executed
         - param1 [string]: sorterName - the name of the sorter used
+        - param2 [...any]: the variadic argument passed from .Sort()
     ]]
     DefineRemotesToServer: (callbacks: RemoteCallbacks) -> () 
 }
