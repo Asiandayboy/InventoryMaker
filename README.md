@@ -16,6 +16,7 @@ There are two components to InventoryMaker:
 - **Hover Prompts** – Display item details when hovering over an item.
 - **Custom Filters** – Define your own functions to filter items based on its properties
 - **Search Bar Filter** – Instantly filter items using TextBox input
+- **Sorting** - Sort items in your inventory based on custom sorters
 
 ## Links
 - [**Documentation**](https://inventorymaker.vercel.app/)
