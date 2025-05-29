@@ -17,8 +17,9 @@ type KeyBinding = {
 }
 
 
-local initialized = false
-local scrollIndex = -1
+local data: { IMUserType.USER_ITEM_TYPE | false } = nil::any
+local initialized: boolean = false
+local scrollIndex: number = -1
 local con1: RBXScriptConnection? = nil
 local con2: RBXScriptConnection? = nil
 local con3: RBXScriptConnection? = nil
@@ -100,12 +101,11 @@ end
 
 
 local function scrollHotbar(
-    data: { IMUserType.USER_ITEM_TYPE | false }, 
     container: IMContainer._Container, 
     scrollDir: number, 
     callback: (item: IMUserType.USER_ITEM_TYPE?, slotIndex: number) -> ()
 )
-    scrollIndex = (scrollIndex - scrollDir) % container._capacity
+    scrollIndex = (scrollIndex - scrollDir)::number % container._capacity
 
     local containerIndex = scrollIndex + 1
     local si = IMContainer.GetSlotIndexFromContainerIndex(container, containerIndex)
@@ -125,7 +125,6 @@ end
 
 
 function Hotbar.ConnectScrollingHotbarEvent(container: IMContainer._Container,
-    data: { IMUserType.USER_ITEM_TYPE | false },
     callback: (item: IMUserType.USER_ITEM_TYPE?, slotIndex: number) -> ()
 )
     if not MOUSE_ENABLED then return end  
@@ -141,12 +140,17 @@ function Hotbar.ConnectScrollingHotbarEvent(container: IMContainer._Container,
          1 = scrolling up
     ]]
     con2 = container._PARENT_CONTAINER.MouseWheelBackward:Connect(function()  
-        scrollHotbar(data, container, -1, callback)
+        scrollHotbar(container, -1, callback)
     end)
 
     con3 = container._PARENT_CONTAINER.MouseWheelForward:Connect(function()  
-        scrollHotbar(data, container, 1, callback)
+        scrollHotbar(container, 1, callback)
     end)
+end
+
+function Hotbar.SetDataRef(d: { IMUserType.USER_ITEM_TYPE | false })
+    if not MOUSE_ENABLED then return end
+    data = d
 end
 
 --[[
@@ -155,12 +159,13 @@ end
     So, whenever that happens, the scroll index must be "refreshed" to
     match the index of the equipped item.
 ]]
-function Hotbar.RefreshScrollIndex(container: IMContainer._Container, slotIndex: number)
+function Hotbar.RefreshScrollIndex(container: IMContainer._Container, currEquippedSlotIndex: number)
     if not MOUSE_ENABLED then return end
     if not container._hotbarConfigs or not container._hotbarConfigs.ScrollingHotbar then return end  
     
-    local containerIndex = IMContainer.GetContainerIndexFromSlotIndex(container, slotIndex)
+    local containerIndex = IMContainer.GetContainerIndexFromSlotIndex(container, currEquippedSlotIndex)
     scrollIndex = containerIndex - 1
+    warn("SCROLL INDEX REFREHSED", containerIndex)
 end
 
 function Hotbar.Disconnect()

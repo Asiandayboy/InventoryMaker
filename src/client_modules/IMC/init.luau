@@ -26,6 +26,10 @@
             - removed callback argument from IMC.ToggleInventory() in favor of this new method
         - [New Feature]: Inventory toggles off and prevents further toggling when character is dead.
         - [Changed]: .AddItem() now automatically creates a new item, when stackOnAdd = true, if a stack cannot be found 
+        - [New Method]: IMC.DefineRenderEquippedSlots()
+            - [New Method]: Container:DefineRenderEquippedSlot()
+            - removed IMC.DefineRenderEquippedSlot() since it did not account for containers
+
 
 
 	v1.1.0 Update Log (5/20/25):
@@ -259,16 +263,8 @@ type _ActiveSlot = {
 type _EquippedItem = {
 	_item: ITEM_TYPE,
 	_filledGui: GuiObject,
-	_cleanupFn: EquippedRenderCleanupFunc,
+	_cleanupFn: IMContainer.EquippedRenderCleanupFunc,
 }
-
-export type EquippedRenderCleanupFunc = (lastItem: ITEM_TYPE, lastFilledGui: GuiObject) -> ()
-export type EquippedRenderFunc = (
-	item: ITEM_TYPE,
-	filledGui: GuiObject,
-	info: ItemPositionInfo
-) -> EquippedRenderCleanupFunc
-
 
 type _ContextMenuInfo = {
 	_TEMPLATE: GuiObject,
@@ -341,7 +337,6 @@ type _InventoryMakerProps = {
 	_STACKING_CONFIGS: StackingConfigs,
 	_CUSTOM_FILTERS: { [string]: IMFilter.CustomFilterFunc },
 	_SWITCH_VALIDATE_FUNC: SwitchValidateFunc,
-	_EQUIPPED_RENDER_FUNC: EquippedRenderFunc,
 	
 	_CUSTOM_SORTERS: { [string]: Sorter },
 
@@ -445,24 +440,45 @@ local function getContainerNameFromFilledGui(filledGui: GuiObject): string
 	return container:GetAttribute(IMConstants.CONTAINER_ATTRIBUTE_NAME)::string
 end
 
+-- This must be called before the filledGui is destroyed
 local function removeEquippedItem(props: _InventoryMakerProps, item: ITEM_TYPE, 
     targetContainer: IMContainer._Container, slotIndex: number
 )
 	local equippedItem = props._equippedItem
 	if equippedItem and equippedItem._item == item then
-		equippedItem._cleanupFn(equippedItem._item, equippedItem._filledGui)
+        local info: ItemPositionInfo = {
+            SlotIndex = slotIndex,
+            ContainerIndex = IMContainer.GetContainerIndexFromSlotIndex(targetContainer, slotIndex),
+            ContainerName = targetContainer._name
+        }
+        local emptyGui = equippedItem._filledGui.Parent::GuiObject
+		equippedItem._cleanupFn(equippedItem._item, equippedItem._filledGui, emptyGui, info)
 		props._equippedItem = nil
 
         IMHotbar.RefreshScrollIndex(targetContainer, slotIndex)
 	end
 end
 
-local function setEquippedItem(props: _InventoryMakerProps, item: ITEM_TYPE?, filledGui: GuiObject?, container: IMContainer._Container, stacked: boolean)
+local function setEquippedItem(props: _InventoryMakerProps, 
+    item: ITEM_TYPE?, 
+    filledGui: GuiObject?, 
+    container: IMContainer._Container, 
+    stacked: boolean,
+    scrollingInput: boolean
+)
 	if IMContainer.IsBitFlagEnabled(container._flags, InventoryMaker.NO_EQUIPPED_STATE) then return end
 	
 	local equippedItem = props._equippedItem
 	if equippedItem and equippedItem._cleanupFn then
-		equippedItem._cleanupFn(equippedItem._item, equippedItem._filledGui)
+        local emptyGui = equippedItem._filledGui.Parent::GuiObject
+		local slotIndex = getSlotIndexFromSlot(emptyGui)::number
+        local cIndex = IMContainer.GetContainerIndexFromSlotIndex(container, slotIndex)
+        local info: ItemPositionInfo = {
+			SlotIndex = slotIndex,
+			ContainerIndex = cIndex,
+			ContainerName = container._name
+		}
+		equippedItem._cleanupFn(equippedItem._item, equippedItem._filledGui, emptyGui, info)
 	end
 	if item and (if equippedItem then equippedItem._item ~= item else item) or (item and stacked) then
 		local emptyGui = (filledGui::GuiObject).Parent::GuiObject
@@ -473,7 +489,8 @@ local function setEquippedItem(props: _InventoryMakerProps, item: ITEM_TYPE?, fi
 			ContainerIndex = cIndex,
 			ContainerName = container._name
 		}
-		local newCleanupFn = props._EQUIPPED_RENDER_FUNC(item, filledGui::GuiObject, info)
+		-- local newCleanupFn = props._EQUIPPED_RENDER_FUNC(item, filledGui::GuiObject, info)
+        local newCleanupFn = container._CALLBACKS._EQUIPPED_RENDER_FUNC(item, filledGui::GuiObject, emptyGui, info)
 		
 		props._equippedItem = {
 			_item = item,
@@ -482,7 +499,10 @@ local function setEquippedItem(props: _InventoryMakerProps, item: ITEM_TYPE?, fi
 		}
 		
 		if IMS._CALLBACKS then IMS._CALLBACKS.OnEquip(slotIndex) end
-        IMHotbar.RefreshScrollIndex(container, slotIndex)
+
+        if not scrollingInput then
+            IMHotbar.RefreshScrollIndex(container, slotIndex)
+        end
 	else
 		props._equippedItem = nil -- unequipping the same equipped item
 		if IMS._CALLBACKS then IMS._CALLBACKS.OnEquip(nil) end
@@ -507,7 +527,13 @@ local function refreshEquippedItem(props: _InventoryMakerProps, item: ITEM_TYPE,
 		if equippedItem._item ~= item then return end
 		
 		-- unequip the equipped item if it gets moved into a container with NO_EQUIPPED_STATE flag enabled
-		equippedItem._cleanupFn(equippedItem._item, newFilledGui)
+        local slotIndex = getSlotIndexFromSlot(slotGui)::number
+        local info: ItemPositionInfo = {
+            SlotIndex = slotIndex,
+            ContainerIndex = IMContainer.GetContainerIndexFromSlotIndex(container, slotIndex)::number,
+            ContainerName = container._name
+        }
+		equippedItem._cleanupFn(equippedItem._item, newFilledGui, slotGui, info)
 		props._equippedItem = nil
 		if IMS._CALLBACKS then IMS._CALLBACKS.OnEquip(nil) end
 		debugWarn("Item unequipped; item was moved into a container with NO_EQUIPPED_STATE flag enabled.")
@@ -527,7 +553,7 @@ local function refreshEquippedItem(props: _InventoryMakerProps, item: ITEM_TYPE,
 			ContainerIndex = containerIndex,
 			ContainerName = container._name
 		}
-		equippedItem._cleanupFn = props._EQUIPPED_RENDER_FUNC(item, newFilledGui, info)
+		equippedItem._cleanupFn = container._CALLBACKS._EQUIPPED_RENDER_FUNC(item, newFilledGui, slotGui, info)
 	end
 end
 
@@ -1362,7 +1388,7 @@ local function connectFilledGuiEvents(props: _InventoryMakerProps,
 			closeContextMenuStack(props, 1)
 		end
 		setActiveSlot(props, itemToToggleEquip, filledGui, draggable)
-		setEquippedItem(props, itemToToggleEquip, filledGui, container, false)
+		setEquippedItem(props, itemToToggleEquip, filledGui, container, false, false)
 	end
 	
 	--[[
@@ -1416,7 +1442,7 @@ local function connectFilledGuiEvents(props: _InventoryMakerProps,
 		local toggled = props._toggled
 		if isHotbarContainer and not toggled then
             local item = getItemFromFilledGui(filledGui)
-			setEquippedItem(props, item, filledGui, container, false)
+			setEquippedItem(props, item, filledGui, container, false, false)
 			
 			-- disable left click callback on mobile since mobile does not have a left click mouse button
 			if containerCb._ACTIVATED_FUNC and mouseEnabled then 
@@ -1682,10 +1708,10 @@ local function stackOnAddItem(
 		if equippedItem then
 			local canStack = props._STACKING_CONFIGS._STACK_VALIDATE(targetItem, equippedItem._item)
 			if not canStack and canAutoEquip then
-				setEquippedItem(props, targetItem, targetFilledGui, container, true)
+				setEquippedItem(props, targetItem, targetFilledGui, container, true, false)
 			end
 		elseif canAutoEquip then
-			setEquippedItem(props, targetItem, targetFilledGui, container, true)
+			setEquippedItem(props, targetItem, targetFilledGui, container, true, false)
 		end
 		
 		local cIndex = IMContainer.GetContainerIndexFromSlotIndex(container, targetSlotIndex)
@@ -1727,7 +1753,7 @@ local function stackOnAddItem(
 				props._currSize += 1
 				
 				if not IMContainer.IsBitFlagEnabled(leftoverContainer._flags, InventoryMaker.NO_AUTO_EQUIP) then
-					setEquippedItem(props, itemRef, newFilledGui, leftoverContainer, true)
+					setEquippedItem(props, itemRef, newFilledGui, leftoverContainer, true, false)
 				end
 
 				if cRef._name == IMConstants.CONTAINER_HOTBAR_NAME then
@@ -2048,10 +2074,6 @@ function InventoryMaker.Build(containers: { IMContainer._Container }, itemspace:
 		error("[InventoryMaker]: You must define remotes to server with InventoryMaker.IMS.DefineRemotesToServer() in order to build the inventory.")
 	end
 
-    if not _inventoryMakerProps._EQUIPPED_RENDER_FUNC then
-        error("[InventoryMaker]: You must define how an equipped item is rendered by calling .DefineRenderEquippedSlot().")
-    end
-
 	local invCapacity = _inventoryMakerProps._capacity
 	
 	local function onFilledSlotCreated(filledGui: GuiObject, slot: GuiObject, item: ITEM_TYPE, container: IMContainer._Container, slotIndex: number, cIndex: number)
@@ -2069,17 +2091,16 @@ function InventoryMaker.Build(containers: { IMContainer._Container }, itemspace:
 
 			container._hotbarConfigs.OnKeyPress = function(item: ITEM_TYPE, filledGui: GuiObject, emptyGui: GuiObject, info: ItemPositionInfo)
 				if _inventoryMakerProps._dragging then return end
-				setEquippedItem(_inventoryMakerProps, item, filledGui, container, false)
+				setEquippedItem(_inventoryMakerProps, item, filledGui, container, false, false)
 				onKeyPress(item, filledGui, emptyGui, info)
 			end
 
 			IMHotbar.ConnectKeybinds()
-            IMHotbar.ConnectScrollingHotbarEvent(container, _inventoryMakerProps._data::_DATA, 
-                function(item: ITEM_TYPE?, slotIndex: number)
-                    local filledGui = IMContainer.GetFilledGuiFromIndex(container, slotIndex)::GuiObject
-                    setEquippedItem(_inventoryMakerProps, item, filledGui, container, false)
-                end
-            )
+            IMHotbar.SetDataRef(_inventoryMakerProps._data::_DATA)
+            IMHotbar.ConnectScrollingHotbarEvent(container, function(item: ITEM_TYPE?, slotIndex: number)
+                local filledGui = IMContainer.GetFilledGuiFromIndex(container, slotIndex)
+                setEquippedItem(_inventoryMakerProps, item, filledGui, container, false, true)
+            end)
 		end
 	end
 	
@@ -2153,14 +2174,16 @@ function InventoryMaker.Build(containers: { IMContainer._Container }, itemspace:
 			if lastIndex > _inventoryMakerProps._capacity then
 				error(string.format("[InventoryMaker: Containers collectively exceed inventory capacity of %d.", invCapacity), 2)
 			end
-			
 			if capacity > invCapacity then 
 				error(string.format("[InventoryMaker]: Container '%s' exceeds inventory capacity of %d.", container._name, invCapacity), 2)
 			end
-			
 			if not container._EMPTY_TEMPLATE then 
 				error(string.format("[InventoryMaker]: No gui template for empty slots defined for container (%s).", container._name))
 			end
+            if not container._CALLBACKS._EQUIPPED_RENDER_FUNC and 
+                not IMContainer.IsBitFlagEnabled(container._flags, InventoryMaker.NO_EQUIPPED_STATE) then
+                error(string.format("[InventoryMaker]: No EquippedRenderFunc defined for container %s", container._name))
+            end
 		end
 		
 		_inventoryMakerProps._containers[container._name] = container
@@ -2172,7 +2195,7 @@ function InventoryMaker.Build(containers: { IMContainer._Container }, itemspace:
 		IMContainer.Init(container, _inventoryMakerProps._data, onFilledSlotCreated)
 		table.insert(_inventoryMakerProps._containersIndex, container._name)
 
-		if container._name == IMConstants.CONTAINER_HOTBAR_NAME then initHotbarContainer(container) end
+		if container._name == IMConstants.CONTAINER_HOTBAR_NAME then initHotbarContainer(container::IMContainer._Container) end
 		if itemspace == nil then container._inItemspace = true end
 
 		lastIndex = lastIndex + capacity
@@ -2254,7 +2277,7 @@ function InventoryMaker.AddItem(newItem: ITEM_TYPE, stackOnAdd: boolean?): boole
 		connectFilledGuiEvents(_inventoryMakerProps, filledGui, slot, c)
 		
 		if not IMContainer.IsBitFlagEnabled(c._flags, InventoryMaker.NO_AUTO_EQUIP) then
-			setEquippedItem(_inventoryMakerProps, item, filledGui, c, false)
+			setEquippedItem(_inventoryMakerProps, item, filledGui, c, false, false)
 		end
 		
 		if c._name == IMConstants.CONTAINER_HOTBAR_NAME then
@@ -2821,22 +2844,12 @@ end
 
 
 --[[
-	This function allows you to define how an item is rendered, through a callback, when it is equipped. An item is 
-	"equipped" when it is clicked with left-clicked, when triggered with a hotbar keybind when it is in a hotbar container,
-	and when it's a new item that's been added with AddItem() (when NO_AUTO_EQUIP flag is not enabled). 
-	Only one item can be "equipped" at a time. 
-	
-	This "equipped" works for all containers that don't have the NO_EQUIP flag enabled.
-	This "equipped" state is only a logical state; it does not internally handle the physical equipping of objects. 
-	
-	This callback must return another callback, which is a cleanup function that gets run when the item is
-	"unequipped", such as when another item is equipped instead. This cleanup function is where you undo
-	the effects of the "equipped" state.
-	
-	You cannot equip an item while it is being dragged.
+	Define the same EquippedRenderFunc for all provided containers
 ]]
-function InventoryMaker.DefineRenderEquippedSlot(renderFunc: EquippedRenderFunc)
-	_inventoryMakerProps._EQUIPPED_RENDER_FUNC = renderFunc
+function InventoryMaker.DefineRenderEquippedSlots(containers: { IMContainer.Container }, renderFunc: IMContainer.EquippedRenderFunc)
+	for i = 1, #containers do
+        containers[i]:DefineRenderEquippedSlot(renderFunc)
+	end
 end
 
 
@@ -2975,6 +2988,7 @@ function InventoryMaker.IncreaseCapacity(targetContainerName: string, amount: nu
 	
 	_inventoryMakerProps._data = newData
 	_inventoryMakerProps._capacity += amount
+    IMHotbar.SetDataRef(_inventoryMakerProps._data)
 	
 	if _inventoryMakerProps._CALLBACKS and _inventoryMakerProps._CALLBACKS._ON_SIZE_CHANGED then
 		_inventoryMakerProps._CALLBACKS._ON_SIZE_CHANGED(_inventoryMakerProps._currSize, _inventoryMakerProps._capacity)
@@ -3073,6 +3087,7 @@ function InventoryMaker.DecreaseCapacity(targetContainerName: string, amount: nu
 	targetContainer._capacity = newContainerCapacity
 	_inventoryMakerProps._data = newData
 	_inventoryMakerProps._capacity -= amount
+    IMHotbar.SetDataRef(_inventoryMakerProps._data)
 	
 	if _inventoryMakerProps._CALLBACKS and _inventoryMakerProps._CALLBACKS._ON_SIZE_CHANGED then
 		_inventoryMakerProps._CALLBACKS._ON_SIZE_CHANGED(_inventoryMakerProps._currSize, _inventoryMakerProps._capacity)
@@ -3265,7 +3280,6 @@ function InventoryMaker.Sort(sorterName: string, ...: any)
             ci += 1
 		end
 
-
         if not equippedItem then continue end
         if notEquippedFilledGui and actualEquippedSlotIndex and notEquippedSlotIndex then
             local equippedFilledGui = equippedItem._filledGui
@@ -3309,9 +3323,17 @@ function InventoryMaker.Sort(sorterName: string, ...: any)
                     notEquippedSlotIndex, 
                     notEquippedCi
                 )
+
+                local emptyGui = equippedItem._filledGui.Parent::GuiObject
+                local si = getSlotIndexFromSlot(emptyGui)::number
+
+                if si >= container._invStartIndex and si <= container._invEndIndex then
+                    IMHotbar.RefreshScrollIndex(container, si)
+                end
             end
+
         end
-	end
+    end
 
     local sortIMSFunc = (IMS._CALLBACKS::RemoteCallbacks).OnSort
     if sortedCount >= 1 and sortIMSFunc then
@@ -3401,7 +3423,16 @@ local function resetInventory()
     InventoryMaker.ToggleOff()
     local equippedItem = _inventoryMakerProps._equippedItem
     if equippedItem then
-        equippedItem._cleanupFn(equippedItem._item, equippedItem._filledGui)
+        local emptyGui = equippedItem._filledGui.Parent::GuiObject
+        local slotIndex = getSlotIndexFromSlot(emptyGui)::number
+        local containerName = getContainerNameFromSlot(emptyGui)
+        local container = _inventoryMakerProps._containers[containerName]
+        local info: ItemPositionInfo = {
+            SlotIndex = slotIndex,
+            ContainerIndex = IMContainer.GetContainerIndexFromSlotIndex(container, slotIndex),
+            ContainerName = containerName
+        }
+        equippedItem._cleanupFn(equippedItem._item, equippedItem._filledGui, emptyGui, info)
         _inventoryMakerProps._equippedItem = nil
     end
 end

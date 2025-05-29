@@ -87,6 +87,18 @@ export type ActivatedCallback = (item: ITEM_TYPE, filledGui: GuiObject, slotInde
 export type OnItemAddedCallback = (item: ITEM_TYPE, filledGui: GuiObject, info: ItemPositionInfo) -> ()
 export type AllowedItemsCallback = (item: ITEM_TYPE) -> boolean
 export type OnItemShiftedCallback = (item: ITEM_TYPE, info: ItemPositionInfo) -> ()
+export type EquippedRenderCleanupFunc = (
+    lastItem: ITEM_TYPE,
+    lastFilledGui: GuiObject?,
+    lastEmptyGui: GuiObject,
+    lastInfo: ItemPositionInfo
+) -> ()
+export type EquippedRenderFunc = (
+    item: ITEM_TYPE, 
+    filledGui: GuiObject, 
+    emptyGui: GuiObject,
+    info: ItemPositionInfo
+) -> EquippedRenderCleanupFunc
 
 export type Container = {
     --[[
@@ -207,6 +219,25 @@ export type Container = {
             type AllowedItemsCallback = (item: ITEM_TYPE) -> boolean
     ]]
 	DefineAllowedItems: (self: Container, callback: AllowedItemsCallback) -> (),
+
+    --[[
+        Define how equipped slots are rendered in the container by providing
+        a render function. This render function must also return a cleanup
+        function to undo the UI effects of the equipping. This cleanup function is called
+        when the equipped item is "unequipped", such as when another item is equipped.
+
+        An item is "equipped" when it is clicked with left-clicked, when triggered with 
+        a hotbar keybind when it is in a hotbar container, and when it's a new item that's 
+        been added with AddItem() (when NO_AUTO_EQUIP flag is not enabled). 
+        Only one item can be "equipped" at a time. 
+        
+        This "equipped" works for all containers that don't have the NO_EQUIPPED_STATE flag enabled.
+        This "equipped" state is only a logical state; it does not internally handle the physical 
+        equipping of objects. 
+        
+        **You cannot equip an item while it is being dragged.**
+    ]]
+    DefineRenderEquippedSlot: (self: Container, renderFunc: EquippedRenderFunc) -> (),
 }
 
 export type _Container = {
@@ -244,6 +275,7 @@ export type _Container = {
 		_ALLOWED_ITEMS_FUNC: AllowedItemsCallback,
 		_ON_ITEM_ADDED_FUNC: OnItemAddedCallback,
         _ON_ITEM_SHIFTED_FUNC: OnItemShiftedCallback,
+        _EQUIPPED_RENDER_FUNC: EquippedRenderFunc,
 	}
 } & Container
 
@@ -476,6 +508,9 @@ function IMContainer.new(name: string, capacity: number, flags: number): Contain
 			self._CALLBACKS._ALLOWED_ITEMS_FUNC = callback
 		end,
 		
+        DefineRenderEquippedSlot = function(self: _Container, renderFunc: EquippedRenderFunc)
+            self._CALLBACKS._EQUIPPED_RENDER_FUNC = renderFunc
+        end
 	}
 	
 	
