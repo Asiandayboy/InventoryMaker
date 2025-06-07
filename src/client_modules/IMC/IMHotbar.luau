@@ -165,7 +165,6 @@ function Hotbar.RefreshScrollIndex(container: IMContainer._Container, currEquipp
     
     local containerIndex = IMContainer.GetContainerIndexFromSlotIndex(container, currEquippedSlotIndex)
     scrollIndex = containerIndex - 1
-    warn("SCROLL INDEX REFREHSED", containerIndex)
 end
 
 function Hotbar.Disconnect()
