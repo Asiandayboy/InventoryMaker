@@ -13,6 +13,8 @@
 	InventoryMakerClient (IMC)
 	-----------------------------------------------------------------------------
     v1.2.1 Update Log (UNRELEASED)
+        - [Changed]: Added another cleanup function to DefineRenderEquippedSlot, used to cleanup UI effects bound to the slotGui
+            when the equipped item is moved to a different container
         - [Bug Fix]: Old gui objects was used when equipping a new item after switching across containers, resulting in a nil error
         - Removed unnecessary warn statement
 
@@ -267,6 +269,7 @@ type _EquippedItem = {
 	_item: ITEM_TYPE,
 	_filledGui: GuiObject,
 	_cleanupFn: IMContainer.EquippedRenderCleanupFunc,
+    _cleanupOldGuiFn: IMContainer.EquippedOldGuiRenderCleanupFunc?
 }
 
 type _ContextMenuInfo = {
@@ -492,13 +495,14 @@ local function setEquippedItem(props: _InventoryMakerProps,
 			ContainerIndex = cIndex,
 			ContainerName = container._name
 		}
-		-- local newCleanupFn = props._EQUIPPED_RENDER_FUNC(item, filledGui::GuiObject, info)
-        local newCleanupFn = container._CALLBACKS._EQUIPPED_RENDER_FUNC(item, filledGui::GuiObject, emptyGui, info)
+
+        local newCleanupFn, cleanupOldGuiFn = container._CALLBACKS._EQUIPPED_RENDER_FUNC(item, filledGui::GuiObject, emptyGui, info)
 		
 		props._equippedItem = {
 			_item = item,
 			_filledGui = filledGui::GuiObject,
-			_cleanupFn = newCleanupFn
+			_cleanupFn = newCleanupFn,
+            _cleanupOldGuiFn = cleanupOldGuiFn
 		}
 		
 		if IMS._CALLBACKS then IMS._CALLBACKS.OnEquip(slotIndex) end
@@ -552,12 +556,32 @@ local function refreshEquippedItem(props: _InventoryMakerProps, item: ITEM_TYPE,
 		end
 		equippedItem._filledGui = newFilledGui
 		local info: ItemPositionInfo = {
-			SlotIndex = slotIndex,
+            SlotIndex = slotIndex,
 			ContainerIndex = containerIndex,
 			ContainerName = container._name
 		}
 		equippedItem._cleanupFn = container._CALLBACKS._EQUIPPED_RENDER_FUNC(item, newFilledGui, slotGui, info)
 	end
+end
+
+--[[
+    Used to cleanup any equipped UI effects that are done to the slotGui itself.
+]]
+local function cleanupEquippedOldSlotGui(props: _InventoryMakerProps, container: IMContainer._Container, item: ITEM_TYPE, slotGui: GuiObject)
+    local equippedItem = props._equippedItem
+    if not equippedItem then return end
+    if equippedItem._item ~= item then return end
+
+    local fn = equippedItem._cleanupOldGuiFn
+    if not fn then return end
+
+    local slotIndex = getSlotIndexFromSlot(slotGui)::number
+    local info: ItemPositionInfo = {
+        SlotIndex = slotIndex,
+        ContainerIndex = IMContainer.GetContainerIndexFromSlotIndex(container, slotIndex),
+        ContainerName = container._name
+    }
+    fn(item, slotGui, info)
 end
 
 local function areContextMenusOpened(menusOpened: { _OpenedContextMenu }): boolean
@@ -744,6 +768,8 @@ local function switch(props: _InventoryMakerProps, filledGui1: GuiObject, slot2:
 			bindHotbarKey(container1::IMContainer._Container, props._data, bIndex, IMContainer.GetContainerIndexFromSlotIndex(container1, bIndex))
 		end
 		filledGui1.Parent = slot2
+        cleanupEquippedOldSlotGui(props, container1, item1, slot1)
+        refreshEquippedItem(props, item1, filledGui1, slot2)
 		
 		if filledGui2 then
 			if isHotbar then
@@ -751,6 +777,8 @@ local function switch(props: _InventoryMakerProps, filledGui1: GuiObject, slot2:
 				bindHotbarKey(container2::IMContainer._Container, props._data, aIndex, IMContainer.GetContainerIndexFromSlotIndex(container2, aIndex)::number)
 			end
 			filledGui2.Parent = slot1
+            cleanupEquippedOldSlotGui(props, container2, item2::ITEM_TYPE, slot2)
+            refreshEquippedItem(props, item2::ITEM_TYPE, filledGui2, slot1)
 		else
 			if isHotbar then
 				unbindHotbarKey(container1::IMContainer._Container, aIndex)
@@ -773,6 +801,7 @@ local function switch(props: _InventoryMakerProps, filledGui1: GuiObject, slot2:
 			end
 		)
 	else
+        cleanupEquippedOldSlotGui(props, container1, item1, slot1)
 		IMContainer.DestroyFilledGui(container1::IMContainer._Container, aIndex)	
 		if (container1::IMContainer._Container)._name == IMConstants.CONTAINER_HOTBAR_NAME then
 			unbindHotbarKey(container1::IMContainer._Container, aIndex)

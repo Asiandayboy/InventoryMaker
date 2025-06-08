@@ -93,12 +93,17 @@ export type EquippedRenderCleanupFunc = (
     lastEmptyGui: GuiObject,
     lastInfo: ItemPositionInfo
 ) -> ()
+export type EquippedOldGuiRenderCleanupFunc = (
+    lastItem: ITEM_TYPE,
+    oldEmptyGui: GuiObject,
+    lastInfo: ItemPositionInfo
+) -> ()
 export type EquippedRenderFunc = (
     item: ITEM_TYPE, 
     filledGui: GuiObject, 
     emptyGui: GuiObject,
     info: ItemPositionInfo
-) -> EquippedRenderCleanupFunc
+) -> (EquippedRenderCleanupFunc, EquippedOldGuiRenderCleanupFunc?)
 
 export type Container = {
     --[[
