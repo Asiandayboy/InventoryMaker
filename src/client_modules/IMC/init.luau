@@ -7,16 +7,18 @@
 	
 	Created by: robloxdestroyer1035
 	Version: v1.2.0 
-	Last Updated: 6/7/25
+	Last Updated: 6/8/25
 	
 	-----------------------------------------------------------------------------
 	InventoryMakerClient (IMC)
 	-----------------------------------------------------------------------------
     v1.2.1 Update Log (UNRELEASED)
+        - [Bug Fix]: Old gui objects was used when equipping a new item after switching across containers, resulting in a nil error
+        - [Bug Fix]: Non-fixed hover prompt not considering GuiInset
+        - [Buf Fix]: Static context menu overflow check not considering GuiInset
         - [Changed]: Added another cleanup function to DefineRenderEquippedSlot, used to cleanup UI effects bound to the slotGui
             when the equipped item is moved to a different container
-        - [Bug Fix]: Old gui objects was used when equipping a new item after switching across containers, resulting in a nil error
-        - Removed unnecessary warn statement
+        - [Changed] Removed unnecessary warn statement
 
     v1.2.0 Update Log (5/29/25)
         - [Bug Fix]: OnSizeChanged callback not called when stacking with 0 leftovers
@@ -1169,7 +1171,8 @@ local function openStaticContextMenu(props: _InventoryMakerProps, container: IMC
 			+ UDim2.fromOffset(-userOffset.X, userOffset.Y)
 	end
 	
-	local bottomSideY = contextMenuPos.Y.Offset + menuSize.Y
+    local inset = IMUtility.GetGuiInsetY(not props._PARENT_CONTAINER_SCREEN_GUI.IgnoreGuiInset)
+	local bottomSideY = contextMenuPos.Y.Offset + menuSize.Y + inset
 	local bottomSideOverflow = bottomSideY > camera.ViewportSize.Y
 	
 	if bottomSideOverflow then
