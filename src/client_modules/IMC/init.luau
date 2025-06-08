@@ -7,13 +7,17 @@
 	
 	Created by: robloxdestroyer1035
 	Version: v1.2.0 
-	Last Updated: 5/29/25
+	Last Updated: 6/7/25
 	
 	-----------------------------------------------------------------------------
 	InventoryMakerClient (IMC)
 	-----------------------------------------------------------------------------
+    v1.2.1 Update Log (UNRELEASED)
+        - [Bug Fix]: Old gui objects was used when equipping a new item after switching across containers, resulting in a nil error
+        - Removed unnecessary warn statement
+
     v1.2.0 Update Log (5/29/25)
-        - [Bug FIx]: OnSizeChanged callback not called when stacking with 0 leftovers
+        - [Bug Fix]: OnSizeChanged callback not called when stacking with 0 leftovers
         - [New Feature]: Sorting
             - [New Method]: IMC.DefineCustomSorters()
             - [New Method]: IMC.Sort()
@@ -584,8 +588,6 @@ local function unbindHotbarKey(container: IMContainer._Container, slotIndex: num
 end
 
 local function bindHotbarKey(container: IMContainer._Container, data: _DATA, 
-    filledGui: GuiObject, 
-    slot: GuiObject, 
     slotIndex: number, 
     containerIndex: number
 )
@@ -595,12 +597,15 @@ local function bindHotbarKey(container: IMContainer._Container, data: _DATA,
 	IMHotbar.BindKey(containerIndex, hbConfigs.Keybinds[containerIndex], function()
 		local item = data[slotIndex]
 		if item then
+            -- if the item exists, then it has a filledGui, and therefore a slot
+            local filledGui = IMContainer.GetFilledGuiFromIndex(container, slotIndex)::GuiObject
+            local slotGui = filledGui.Parent::GuiObject
 			local info: ItemPositionInfo = {
 				SlotIndex = slotIndex,
 				ContainerIndex = containerIndex,
 				ContainerName = container._name
 			}
-			hbConfigs.OnKeyPress(item, filledGui, slot, info)
+			hbConfigs.OnKeyPress(item, filledGui, slotGui, info)
 		end
 	end)
 end
@@ -736,14 +741,14 @@ local function switch(props: _InventoryMakerProps, filledGui1: GuiObject, slot2:
 		local isHotbar = container1._name == IMConstants.CONTAINER_HOTBAR_NAME
 		if isHotbar then
 			container1._RENDER_FILLED_FUNC(bIndex, item1, filledGui1, IMContainer.GetContainerIndexFromSlotIndex(container1, bIndex)::number)
-			bindHotbarKey(container1::IMContainer._Container, props._data, filledGui1, slot2, bIndex, IMContainer.GetContainerIndexFromSlotIndex(container1, bIndex))
+			bindHotbarKey(container1::IMContainer._Container, props._data, bIndex, IMContainer.GetContainerIndexFromSlotIndex(container1, bIndex))
 		end
 		filledGui1.Parent = slot2
 		
 		if filledGui2 then
 			if isHotbar then
 				container2._RENDER_FILLED_FUNC(aIndex, item2::ITEM_TYPE, filledGui2, IMContainer.GetContainerIndexFromSlotIndex(container2, aIndex)::number)
-				bindHotbarKey(container2::IMContainer._Container, props._data, filledGui2, slot1, aIndex, IMContainer.GetContainerIndexFromSlotIndex(container2, aIndex)::number)
+				bindHotbarKey(container2::IMContainer._Container, props._data, aIndex, IMContainer.GetContainerIndexFromSlotIndex(container2, aIndex)::number)
 			end
 			filledGui2.Parent = slot1
 		else
@@ -779,7 +784,7 @@ local function switch(props: _InventoryMakerProps, filledGui1: GuiObject, slot2:
 			callback(props, filledGui, slot, item, containerRef, true)
 			refreshEquippedItem(props, item, filledGui, slot)
 			if containerRef._name == IMConstants.CONTAINER_HOTBAR_NAME then
-				bindHotbarKey(containerRef, props._data, filledGui, slot, bIndex, IMContainer.GetContainerIndexFromSlotIndex(containerRef, bIndex))
+				bindHotbarKey(containerRef, props._data, bIndex, IMContainer.GetContainerIndexFromSlotIndex(containerRef, bIndex))
 			end
 		end
 	)
@@ -1212,7 +1217,8 @@ local function openStaticContextMenu(props: _InventoryMakerProps, container: IMC
 			end
 			
 			if not check then
-				if con ~= nil and con.Connected then con:Disconnect() end
+                -- ugly type assertions bc of typechecker, btw
+				if con ~= nil and (con::RBXScriptConnection).Connected then (con::RBXScriptConnection):Disconnect() end
 				closeContextMenuStack(props, 1)
 				setActiveSlot(props, nil)
 				if container._HOVER_INFO then
@@ -1653,7 +1659,7 @@ local function split(props: _InventoryMakerProps, splitSlotIndex: number, currFi
 					refreshEquippedItem(props, itemRef, newFilledGui, newSlot)
 
 					if cRef._name == IMConstants.CONTAINER_HOTBAR_NAME then
-						bindHotbarKey(cRef, props._data, newFilledGui, newSlot, slotIndex, cIndex)
+						bindHotbarKey(cRef, props._data, slotIndex, cIndex)
 					end
 				end
 			)
@@ -1665,7 +1671,7 @@ local function split(props: _InventoryMakerProps, splitSlotIndex: number, currFi
 					props._currSize += 1
 
 					if cRef._name == IMConstants.CONTAINER_HOTBAR_NAME then
-						bindHotbarKey(cRef, props._data, newFilledGui, newSlot, slotIndex, cIndex)
+						bindHotbarKey(cRef, props._data, slotIndex, cIndex)
 					end
 				end
 			)
@@ -1757,7 +1763,7 @@ local function stackOnAddItem(
 
 				if cRef._name == IMConstants.CONTAINER_HOTBAR_NAME then
 					unbindHotbarKey(cRef, slotIndex)
-					bindHotbarKey(cRef, props._data, newFilledGui, newSlot, slotIndex, cIndex)
+					bindHotbarKey(cRef, props._data, slotIndex, cIndex)
 				end
 			end
 		)
@@ -2079,7 +2085,7 @@ function InventoryMaker.Build(containers: { IMContainer._Container }, itemspace:
 		connectFilledGuiEvents(_inventoryMakerProps, filledGui, slot, container)
 		
 		if container._name == IMConstants.CONTAINER_HOTBAR_NAME then
-			bindHotbarKey(container, _inventoryMakerProps._data::_DATA, filledGui, slot, slotIndex, cIndex)
+			bindHotbarKey(container, _inventoryMakerProps._data::_DATA, slotIndex, cIndex)
 		end
 	end
 	
@@ -2280,7 +2286,7 @@ function InventoryMaker.AddItem(newItem: ITEM_TYPE, stackOnAdd: boolean?): boole
 		end
 		
 		if c._name == IMConstants.CONTAINER_HOTBAR_NAME then
-			bindHotbarKey(c, _inventoryMakerProps._data::_DATA, filledGui, slot, slotIndex, cIndex)
+			bindHotbarKey(c, _inventoryMakerProps._data::_DATA, slotIndex, cIndex)
 		end
 	end
 
@@ -2887,7 +2893,7 @@ function InventoryMaker.SetHotbarKeybinds(keybinds: IMContainer.HotbarKeybinds)
 		local filledGui = IMContainer.GetFilledGuiFromIndex(hotbarContainer, slotIndex)
 		if not filledGui then continue end
 		
-		bindHotbarKey(hotbarContainer, data, filledGui, slot, slotIndex, i)
+		bindHotbarKey(hotbarContainer, data, slotIndex, i)
 		hotbarContainer._RENDER_FILLED_FUNC(slotIndex, data[slotIndex]::ITEM_TYPE, filledGui, i)
 	end
 end
@@ -3265,7 +3271,7 @@ function InventoryMaker.Sort(sorterName: string, ...: any)
             filledGui.Parent = slot
             
             if isHotbarContainer then
-                bindHotbarKey(container, data, filledGui, slot, newSlotIndex, ci)
+                bindHotbarKey(container, data, newSlotIndex, ci)
             end
 
             if equippedItem and equippedItem._item == tempSubarr[ci] then
@@ -3305,23 +3311,8 @@ function InventoryMaker.Sort(sorterName: string, ...: any)
             )
 
             if isHotbarContainer then
-                bindHotbarKey(
-                    container, 
-                    data, 
-                    equippedFilledGui, 
-                    equippedFilledGui.Parent::GuiObject, 
-                    actualEquippedSlotIndex, 
-                    equippedCi
-                )
-
-                bindHotbarKey(
-                    container, 
-                    data, 
-                    notEquippedFilledGui, 
-                    notEquippedFilledGui.Parent::GuiObject, 
-                    notEquippedSlotIndex, 
-                    notEquippedCi
-                )
+                bindHotbarKey(container, data, actualEquippedSlotIndex, equippedCi)
+                bindHotbarKey(container, data, notEquippedSlotIndex, notEquippedCi)
 
                 local emptyGui = equippedItem._filledGui.Parent::GuiObject
                 local si = getSlotIndexFromSlot(emptyGui)::number
