@@ -156,7 +156,10 @@ function DraggableUI.Enable(draggableObj: Draggable)
 			if _currDraggable then return end
 			
 			_props._dragStartInputDown = true
-			_currDraggable = draggableObj
+            _currDraggable = draggableObj
+            if _props._dragParent.IgnoreGuiInset ~= _props._guiInsetIgnored then
+                _props._guiInsetIgnored = _props._dragParent.IgnoreGuiInset
+            end
 			
 			saveParentProps(_props)
 			local guiInset = _props._guiInsetIgnored and GuiService:GetGuiInset() or Vector2.zero
