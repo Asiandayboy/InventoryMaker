@@ -728,16 +728,23 @@ function IMContainer.NonFixedHoverPrompt(container: _Container, prompt: GuiObjec
 	local promptSize = prompt.AbsoluteSize
 	local hoverOffset = hoverInfo._OFFSET
 	local rightSideX = mouse.X + promptSize.X + hoverOffset.X.Offset
-	
+    local inset = 0
+    if not container._hoverPromptParent.IgnoreGuiInset then
+        inset = Utility.GetGuiInsetY(not container._hoverPromptParent.IgnoreGuiInset)
+    end
+    
 	if rightSideX > camera.ViewportSize.X then -- position hover prompt on the left side instead
-		prompt.Position = UDim2.fromOffset(mouse.X - promptSize.X, mouse.Y) + UDim2.fromOffset(-hoverOffset.X.Offset, hoverOffset.Y.Offset)
+		prompt.Position = UDim2.fromOffset(mouse.X - promptSize.X, mouse.Y - inset) + UDim2.fromOffset(-hoverOffset.X.Offset, hoverOffset.Y.Offset)
 	else
-		prompt.Position = UDim2.fromOffset(mouse.X, mouse.Y) + hoverInfo._OFFSET
+		prompt.Position = UDim2.fromOffset(mouse.X, mouse.Y - inset) + hoverInfo._OFFSET
 	end
 	
+    if container._hoverPromptParent.IgnoreGuiInset then
+        inset = Utility.GetGuiInsetY(container._hoverPromptParent.IgnoreGuiInset)
+    end
 	local promptPos = prompt.AbsolutePosition
 	local somePadding = 5
-	local bottomSideY = promptPos.Y + promptSize.Y + Utility.GetGuiInsetY(container._hoverPromptParent.IgnoreGuiInset) + somePadding
+	local bottomSideY = promptPos.Y + promptSize.Y + inset + somePadding
 	local viewportY = camera.ViewportSize.Y
 
 	if bottomSideY > viewportY then
