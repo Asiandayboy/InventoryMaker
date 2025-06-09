@@ -12,10 +12,10 @@
 	-----------------------------------------------------------------------------
 	InventoryMakerClient (IMC)
 	-----------------------------------------------------------------------------
-    v1.2.1 Update Log (UNRELEASED)
+    v1.2.1 Update Log (6/8/25)
         - [Bug Fix]: Old gui objects was used when equipping a new item after switching across containers, resulting in a nil error
         - [Bug Fix]: Non-fixed hover prompt not considering GuiInset
-        - [Buf Fix]: Static context menu overflow check not considering GuiInset
+        - [Bug Fix]: Static context menu overflow check not considering GuiInset
         - [Changed]: Added another cleanup function to DefineRenderEquippedSlot, used to cleanup UI effects bound to the slotGui
             when the equipped item is moved to a different container
         - [Changed] Removed unnecessary warn statement

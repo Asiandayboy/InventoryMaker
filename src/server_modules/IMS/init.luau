@@ -4,12 +4,15 @@
 --[[ InventoryMaker
 
 	Created by: robloxdestroyer1035
-	Version: v1.2.0
-	Last Updated: 5/29/25
+	Version: v1.2.1
+	Last Updated: 6/8/25
 
 	-----------------------------------------------------------------------------
 	InventoryMakerServer (IMS)
 	-----------------------------------------------------------------------------
+    v1.2.1 Update Log (6/8/25)
+        - No updates for IMS
+        
     v1.2.0 Update Log (5/29/25)
         - [New Method]: Inventory:DefineSwitchValidation()
         - [New Method]: Inventory:DefineOnSwitched()
