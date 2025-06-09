@@ -6,7 +6,7 @@
 --[[ InventoryMaker
 	
 	Created by: robloxdestroyer1035
-	Version: v1.2.0 
+	Version: v1.2.1
 	Last Updated: 6/8/25
 	
 	-----------------------------------------------------------------------------
