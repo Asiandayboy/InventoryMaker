@@ -204,8 +204,8 @@ local function newContainer(name: string, capacity: number, flags: number): _Con
 	end
 	
 	function props:Destroy()
-		table.clear(self._CALLBACKS)
-		table.clear(self)
+		table.clear(self._CALLBACKS::{ [string]: any })
+		table.clear(self::{ [any]: any })
 	end
 
 

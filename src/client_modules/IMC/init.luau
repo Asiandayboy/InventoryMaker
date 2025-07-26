@@ -1550,7 +1550,7 @@ local function connectFilledGuiEvents(props: _InventoryMakerProps,
 						end
 						
 						if (targetContainer::IMContainer._Container)._stackingEnabled then
-							stackOnDrag(props, targetItem, oldItem, possibleSlot, filledGui, leftover)
+							stackOnDrag(props, targetItem, oldItem, possibleSlot, filledGui::any, leftover)
 							stackedOnDrag = true
 							local targetFilledGui = IMContainer.GetFilledGuiFromIndex(targetContainer::IMContainer._Container, targetSlotIndex)::GuiObject
 							local targetDraggable = targetContainer._draggables[targetFilledGui]
@@ -1566,7 +1566,7 @@ local function connectFilledGuiEvents(props: _InventoryMakerProps,
 			end
 			
 
-			switchFlag = switch(props, filledGui, possibleSlot, 
+			switchFlag = switch(props, filledGui::any, possibleSlot, 
 				function(propsRef: _InventoryMakerProps, newFilledGui, newSlot, itemRef, containerRef, focusedItem)
 					local newDraggable = connectFilledGuiEvents(propsRef, newFilledGui, newSlot, containerRef)
 					if not focusedItem then return end
@@ -1840,7 +1840,7 @@ local function enableSplitting(props: _InventoryMakerProps): RBXScriptConnection
 		local guis = getFilledGuis()
 		for i = 1, #guis do
 			local filledGui = guis[i]
-			if not filledGui.Visible or not filledGui.Parent.Visible then continue end
+			if not filledGui.Visible or not (filledGui.Parent::GuiObject).Visible then continue end
 			local withinGui = IMUtility.IsMouseWithinGui(mouse.X, mouse.Y - inset, filledGui)
 			if not withinGui then continue end
 			
@@ -1930,15 +1930,15 @@ local function inventoryOff(props: _InventoryMakerProps): (boolean, boolean)
     end	
     
     if props._scrollCon and props._scrollCon.Connected then
-        (props::_InventoryMakerProps)._scrollCon:Disconnect()
+        props._scrollCon:Disconnect()
     end
     
     if props._searchBarCon and props._searchBarCon.Connected then
-        (props::_InventoryMakerProps)._searchBarCon:Disconnect()
+        props._searchBarCon:Disconnect()
     end
     
     if props._splittingCon and props._splittingCon.Connected then
-        (props::_InventoryMakerProps)._splittingCon:Disconnect()
+        props._splittingCon:Disconnect()
     end
     
     local hotbar = props._containers[IMConstants.CONTAINER_HOTBAR_NAME]
