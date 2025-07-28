@@ -28,7 +28,7 @@
                     - NPCContainer:Close()
                 - IMC.BuildNPCContainer(NPCContainer)
                 - IMC.DestroyNPCContainer(NPCContainer)
-        - [Added]: OnToggledCallback accepts varargs, passed through IMC.ToggleInventory(), 
+        - [Changed]: OnToggledCallback accepts varargs, passed through IMC.ToggleInventory(), 
             IMC.ToggleOn(), and IMC.ToggleOff()
         - [Changed]: IMC.GetItem() now also returns the slotGui and filledGui
 
