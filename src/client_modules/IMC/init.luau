@@ -12,6 +12,26 @@
 	-----------------------------------------------------------------------------
 	InventoryMakerClient (IMC)
 	-----------------------------------------------------------------------------
+    v1.3.1 Update Log (7/27/25)
+        - [New Feature]: NPC Containers; used to render and interact with npc inventories. I made
+            this primarily to easily create merchant NPCs that you can sell to and buy from.
+            New Methods:
+                - IMC.NPCContainer(name: string, capacity: number): NPCContainer
+                    - NPCContainer:DefineLayout()
+                    - NPCContainer:DefineEmptySlot()
+                    - NPCContainer:DefineFilledSlot()
+                    - NPCContainer:DefineActivatedCallback()
+                    - NPCContainer:DefineHoverPrompt()
+                    - NPCContainer:DefineOpen()
+                    - NPCContainer:DefineClose()
+                    - NPCContainer:Open()
+                    - NPCContainer:Close()
+                - IMC.BuildNPCContainer(NPCContainer)
+                - IMC.DestroyNPCContainer(NPCContainer)
+        - [Added]: OnToggledCallback accepts varargs, passed through IMC.ToggleInventory(), 
+            IMC.ToggleOn(), and IMC.ToggleOff()
+        - [Changed]: IMC.GetItem() now also returns the slotGui and filledGui
+
     v1.2.1 Update Log (6/8/25)
         - [Bug Fix]: Old gui objects was used when equipping a new item after switching across containers, resulting in a nil error
         - [Bug Fix]: Non-fixed hover prompt not considering GuiInset
@@ -255,9 +275,11 @@ local InventoryMaker = {
 
 IMHotbar.DEBUG_PRINT = InventoryMaker.DEBUG_PRINT_KEYBIND_MESSAGES
 
-
+export type NPCContainer = IMContainer.NPCContainer
 export type ItemPositionInfo = IMContainer.ItemPositionInfo
 export type ITEM_TYPE = IMUserType.USER_ITEM_TYPE
+
+type _NPCContainer = IMContainer._NPCContainer
 
 type _DATA = { ITEM_TYPE | false }
 
@@ -312,7 +334,7 @@ export type StackingConfigs = {
 	_SPLIT_UPDATE: SplittingUpdateFunc,
 }
 
-export type OnToggledCallback = (toggled: boolean) -> ()
+export type OnToggledCallback = (toggled: boolean, ...any) -> ()
 export type OnDraggedOutCallback = (guisAtPosition: { GuiObject }, item: ITEM_TYPE, info: ItemPositionInfo) -> ()
 export type OnSizeChangedCallback = (size: number, capacity: number) -> ()
 export type Sorter = (itemA: ITEM_TYPE, itemB: ITEM_TYPE, ...any) -> boolean
@@ -830,7 +852,7 @@ end
 local function closeAllHoverPrompts(containers: { [string]: IMContainer._Container }, screenGui: ScreenGui)
 	for i,container in pairs(containers) do
 		if not container._HOVER_INFO then continue end
-		IMContainer.HideHoverPrompt((container::IMContainer._Container), IMContainer.GetHoverPromptSingleton((container::IMContainer._Container), screenGui))
+		IMContainer.HideHoverPrompt(IMContainer.GetHoverPromptSingleton((container::IMContainer._Container), screenGui))
 	end
 end
 
@@ -1150,7 +1172,7 @@ local function openStaticContextMenu(props: _InventoryMakerProps, container: IMC
 			hoverPrompt.Visible = true
 			hoverInfo._RENDER_FUNC(item, hoverPrompt)
 		else
-			IMContainer.HideHoverPrompt(container, hoverPrompt)
+			IMContainer.HideHoverPrompt(hoverPrompt)
 		end
 	end
 	local promptSize = hoverPrompt and hoverPrompt.AbsoluteSize or Vector2.zero
@@ -1254,7 +1276,7 @@ local function openStaticContextMenu(props: _InventoryMakerProps, container: IMC
 				closeContextMenuStack(props, 1)
 				setActiveSlot(props, nil)
 				if container._HOVER_INFO then
-					IMContainer.HideHoverPrompt(container, IMContainer.GetHoverPromptSingleton(container, props._PARENT_CONTAINER_SCREEN_GUI))
+					IMContainer.HideHoverPrompt(IMContainer.GetHoverPromptSingleton(container, props._PARENT_CONTAINER_SCREEN_GUI))
 				end
 			end
 		end
@@ -1320,6 +1342,86 @@ local function connectContextMenuEvents(props: _InventoryMakerProps,
             openRootMenu()
         end
     end)
+end
+
+
+--[[
+    This function assumes NPC items are fixed in position, never changing in order in the array
+    during runtime
+]]
+local function connectActivatedEventForNPCC(npcContainer: IMContainer._NPCContainer, filledGui: GuiObject, containerIndex: number)
+    local activatedFunc = npcContainer._CALLBACKS._ACTIVATED_FUNC
+    if not activatedFunc then return end
+
+    filledGui.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            local item = npcContainer._data[containerIndex]
+            
+            if activatedFunc then
+                activatedFunc(item, filledGui, containerIndex)
+            end
+        end
+    end)
+end
+
+--[[
+    This function assumes NPC items are fixed in position, never changing in order in the array
+    during runtime
+]]
+local function connectFilledSlotHoverEventsForNPCC(props: _InventoryMakerProps,
+    npcContainer: IMContainer._NPCContainer,
+    filledGui: GuiObject,
+    containerIndex: number
+)
+    local hoverInfo  = npcContainer._HOVER_INFO
+    if not hoverInfo then return end
+
+    local fixedPos = hoverInfo._FIXED_POSITION
+    local prompt = IMContainer.GetHoverPromptSingleton(npcContainer, props._PARENT_CONTAINER_SCREEN_GUI)
+    if not prompt then return end
+    
+    if fixedPos then
+   		filledGui.InputBegan:Connect(function(input)
+			if IMInput.IsInputActive(IMInput.HOVER_PROMPT_START, input) and not areContextMenusOpened(props._contextMenusOpened) then
+                local item = npcContainer._data[containerIndex]
+				
+				if props._dragging then return end
+				if isItemActiveSlot(props::_InventoryMakerProps, item) then return end
+				setActiveSlot(props::_InventoryMakerProps, item, filledGui)
+				
+				IMContainer.FixedHoverPrompt(npcContainer, prompt, item, filledGui)
+			end
+		end)     
+    else
+        filledGui.InputChanged:Connect(function(input)
+			if IMInput.IsInputActive(IMInput.HOVER_PROMPT_START, input) and not areContextMenusOpened(props._contextMenusOpened) then
+				if props._dragging then return end
+
+                local item = npcContainer._data[containerIndex]
+				if not props._activeSlot then
+					setActiveSlot(props::_InventoryMakerProps, item, filledGui)
+				end
+				
+				IMContainer.NonFixedHoverPrompt(npcContainer, prompt, item, filledGui, UIS:GetMouseLocation())
+			end
+		end)
+    end
+
+    filledGui.InputEnded:Connect(function(input)
+		if IMInput.IsInputActive(IMInput.HOVER_PROMPT_END, input) and not areContextMenusOpened(props._contextMenusOpened) then
+            if props._dragging then return end
+            
+            if IMInput.GetInputType() == IMInput.INPUT_TOUCH then
+                if filledGui.Parent == nil then return end
+            end
+
+            local item = npcContainer._data[containerIndex]
+            if isItemActiveSlot(props::_InventoryMakerProps, item) then
+                IMContainer.HideHoverPrompt(prompt)		
+                setActiveSlot(props::_InventoryMakerProps, nil)
+            end
+		end
+	end)
 end
 
 local function connectFilledSlotHoverEvents(props: _InventoryMakerProps, 
@@ -1388,7 +1490,7 @@ local function connectFilledSlotHoverEvents(props: _InventoryMakerProps,
 
             local item = getItemFromFilledGui(filledGui)
             if isItemActiveSlot(props::_InventoryMakerProps, item) then
-                IMContainer.HideHoverPrompt(container, prompt)		
+                IMContainer.HideHoverPrompt(prompt)		
                 setActiveSlot(props::_InventoryMakerProps, nil)
             end
 		end
@@ -1396,10 +1498,10 @@ local function connectFilledSlotHoverEvents(props: _InventoryMakerProps,
 end
 
 local function connectFilledGuiEvents(props: _InventoryMakerProps, 
-    filledGui: GuiObject, 
-    slot: GuiObject, 
+    filledGui: GuiObject,  
     container: IMContainer._Container
 ): IMDraggableUI.Draggable?
+
 	local draggable = container._draggables[filledGui]
 	local screenGui = props._PARENT_CONTAINER_SCREEN_GUI
 	local stackingConfigs = props._STACKING_CONFIGS
@@ -1429,7 +1531,7 @@ local function connectFilledGuiEvents(props: _InventoryMakerProps,
 	end
 	
 	--[[
-		Connect double-tap event to equip an item in a nonhobar container,
+		Connect double-tap event to equip an item in a nonhotbar container,
 		since tap-to-equip for nonhotbar slots is disabled
 		
 		If dragging is enabled, then we only allow the double-tap for nonhotbar slots.
@@ -1497,7 +1599,7 @@ local function connectFilledGuiEvents(props: _InventoryMakerProps,
         local item = getItemFromFilledGui(filledGui)
 		setActiveSlot(props, item, filledGui, draggable)
 		if container._HOVER_INFO then
-			IMContainer.HideHoverPrompt(container, IMContainer.GetHoverPromptSingleton(container, screenGui))
+			IMContainer.HideHoverPrompt(IMContainer.GetHoverPromptSingleton(container, screenGui))
 		end
 
 		if props._USER_CONTEXT_MENUS then
@@ -1568,7 +1670,7 @@ local function connectFilledGuiEvents(props: _InventoryMakerProps,
 
 			switchFlag = switch(props, filledGui::any, possibleSlot, 
 				function(propsRef: _InventoryMakerProps, newFilledGui, newSlot, itemRef, containerRef, focusedItem)
-					local newDraggable = connectFilledGuiEvents(propsRef, newFilledGui, newSlot, containerRef)
+					local newDraggable = connectFilledGuiEvents(propsRef, newFilledGui, containerRef)
 					if not focusedItem then return end
 					
 					forceOpenHoverPrompt(propsRef, containerRef, newFilledGui, itemRef, newDraggable)
@@ -1577,6 +1679,7 @@ local function connectFilledGuiEvents(props: _InventoryMakerProps,
 			break
 		end
 		
+        
 		if switchFlag == SWITCH_NONE and not stackedOnDrag then
 			local onDraggedOutFunc = props._CALLBACKS._ON_DRAGGED_OUT
 			local slotIndex = getSlotIndexFromSlot(filledGui.Parent::GuiObject)::number
@@ -1685,7 +1788,7 @@ local function split(props: _InventoryMakerProps, splitSlotIndex: number, currFi
 			IMContainer.DestroyDummyFilledGui(newItemContainer::IMContainer._Container, splitSlotIndex)
 			IMContainer.AddItemAtIndex(targetContainer::IMContainer._Container, emptySlotIndex, currItem, 
 				function(newFilledGui, newSlot, itemRef, cRef, slotIndex: number, cIndex: number)
-					connectFilledGuiEvents(props, newFilledGui, newSlot, cRef)
+					connectFilledGuiEvents(props, newFilledGui, cRef)
 					props._data[emptySlotIndex] = itemRef
 
 					refreshEquippedItem(props, itemRef, newFilledGui, newSlot)
@@ -1698,7 +1801,7 @@ local function split(props: _InventoryMakerProps, splitSlotIndex: number, currFi
 
 			IMContainer.AddItemAtIndex(newItemContainer::IMContainer._Container, splitSlotIndex, possibleNewItem, 
 				function(newFilledGui, newSlot, itemRef, cRef, slotIndex: number, cIndex: number)
-					connectFilledGuiEvents(props, newFilledGui, newSlot, cRef)
+					connectFilledGuiEvents(props, newFilledGui, cRef)
 					props._data[splitSlotIndex] = itemRef
 					props._currSize += 1
 
@@ -1784,7 +1887,7 @@ local function stackOnAddItem(
 
 		IMContainer.AddItemAtIndex(leftoverContainer, leftoverIndex, newItem, 
 			function(newFilledGui: GuiObject, newSlot: GuiObject, itemRef: ITEM_TYPE, cRef: IMContainer._Container, slotIndex: number, cIndex: number)
-				connectFilledGuiEvents(props, newFilledGui, newSlot, cRef)
+				connectFilledGuiEvents(props, newFilledGui, cRef)
 				updateFunc(leftover, targetItem, itemRef, targetFilledGui, newFilledGui)
 				props._data[leftoverIndex] = itemRef
 				props._currSize += 1
@@ -2038,6 +2141,17 @@ function InventoryMaker.Container(name: string, capacity: number, flags: number?
 end
 
 --[[
+    Creates a new container for NPCs, which is used to render their inventories to allow
+    for the player to interact with it with their inventory.
+
+    The first arg, **name**, should be a unique name for the contianer
+    The second arg, **capacity**, is the max size of the inventory.
+]]
+function InventoryMaker.NPCContainer(name: string, capacity: number): IMContainer.NPCContainer
+    return IMContainer.NewNPCContainer(name, capacity)
+end
+
+--[[
 	NOTE: This module uses <strong>false</strong> to fill in unoccupied slots. This is how
 	empty slots are marked.
 	
@@ -2114,7 +2228,7 @@ function InventoryMaker.Build(containers: { IMContainer._Container }, itemspace:
 	local invCapacity = _inventoryMakerProps._capacity
 	
 	local function onFilledSlotCreated(filledGui: GuiObject, slot: GuiObject, item: ITEM_TYPE, container: IMContainer._Container, slotIndex: number, cIndex: number)
-		connectFilledGuiEvents(_inventoryMakerProps, filledGui, slot, container)
+		connectFilledGuiEvents(_inventoryMakerProps, filledGui, container)
 		
 		if container._name == IMConstants.CONTAINER_HOTBAR_NAME then
 			bindHotbarKey(container, _inventoryMakerProps._data::_DATA, slotIndex, cIndex)
@@ -2246,47 +2360,66 @@ function InventoryMaker.Build(containers: { IMContainer._Container }, itemspace:
 end
 
 --[[
+    Builds the NPC container after the container has been configured, and takes in the inventory data of the NPC
+    to render.
+]]
+function InventoryMaker.BuildNPCContainer(npcContainer: IMContainer._NPCContainer, npcContainerData: { ITEM_TYPE })
+    IMContainer.InitNPCContainer(npcContainer, npcContainerData, function(filledGui: GuiObject, containerIndex: number)  
+        connectActivatedEventForNPCC(npcContainer, filledGui, containerIndex)
+        connectFilledSlotHoverEventsForNPCC(_inventoryMakerProps, npcContainer, filledGui, containerIndex)
+    end)
+end
+
+--[[
+    Calls the npcContainer:Close() method and then destroys the NPC container entirely, removing it from memory.
+]]
+function InventoryMaker.DestroyNPCContainer(npcContainer: IMContainer._NPCContainer)
+    npcContainer:Close()
+    IMContainer.DestroyNPCContainer(npcContainer)
+end
+
+--[[
 	Toggles inventory for state modification. If toggled = true,
 	inventory items can be interacted with.
 
     Calls the OnToggledCallback in a separate thread.
 ]]
-function InventoryMaker.ToggleInventory()
+function InventoryMaker.ToggleInventory(...: any)
     if charDead then debugWarn("Character is dead; cannot toggle inventory") return end
 	if _inventoryMakerProps._data == nil then error("No inventory data to toggle.") end
 
 	local success, toggledState = toggle(_inventoryMakerProps)
     local onToggledCb = _inventoryMakerProps._CALLBACKS._ON_TOGGLED
 	if success and onToggledCb then
-		task.spawn(onToggledCb, toggledState)
+		task.spawn(onToggledCb, toggledState, ...)
 	end
 end
 
 --[[
     Toggles the inventory on and calls the OnToggledCallback in a separate thread.
 ]]
-function InventoryMaker.ToggleOn()
+function InventoryMaker.ToggleOn(...: any)
     if charDead then debugWarn("Character is dead; cannot toggle inventory") return end
     if _inventoryMakerProps._toggled then return end
     local success, toggledState = inventoryOn(_inventoryMakerProps)
 
     local onToggledCb = _inventoryMakerProps._CALLBACKS._ON_TOGGLED
     if success then
-        task.spawn(onToggledCb, toggledState)
+        task.spawn(onToggledCb, toggledState, ...)
     end
 end
 
 --[[
     Toggles the inventory off and calls the OnToggledCallback in a separate thread.
 ]]
-function InventoryMaker.ToggleOff()
+function InventoryMaker.ToggleOff(...: any)
     if charDead then debugWarn("Character is dead; cannot toggle inventory") return end
     if not _inventoryMakerProps._toggled then return end
     local success, toggledState = inventoryOff(_inventoryMakerProps)
 
     local onToggledCb = _inventoryMakerProps._CALLBACKS._ON_TOGGLED
     if success then
-        task.spawn(onToggledCb, toggledState)
+        task.spawn(onToggledCb, toggledState, ...)
     end
 end
 
@@ -2311,7 +2444,7 @@ function InventoryMaker.AddItem(newItem: ITEM_TYPE, stackOnAdd: boolean?): boole
 	stackOnAdd = if stackOnAdd == nil then false else stackOnAdd
 	
 	local function callback(filledGui: GuiObject, slot: GuiObject, item: ITEM_TYPE, c: IMContainer._Container, slotIndex: number, cIndex: number)
-		connectFilledGuiEvents(_inventoryMakerProps, filledGui, slot, c)
+		connectFilledGuiEvents(_inventoryMakerProps, filledGui, c)
 		
 		if not IMContainer.IsBitFlagEnabled(c._flags, InventoryMaker.NO_AUTO_EQUIP) then
 			setEquippedItem(_inventoryMakerProps, item, filledGui, c, false, false)
@@ -2431,7 +2564,7 @@ function InventoryMaker.RemoveItem(slotIndex: number): boolean
 
 
     if isItemActiveSlot(_inventoryMakerProps::_InventoryMakerProps, _inventoryMakerProps._data[slotIndex]) then
-        IMContainer.HideHoverPrompt(targetContainer, IMContainer.GetHoverPromptSingleton(targetContainer, _inventoryMakerProps._PARENT_CONTAINER_SCREEN_GUI))
+        IMContainer.HideHoverPrompt(IMContainer.GetHoverPromptSingleton(targetContainer, _inventoryMakerProps._PARENT_CONTAINER_SCREEN_GUI))
         setActiveSlot(_inventoryMakerProps::_InventoryMakerProps, nil)
     end
     removeEquippedItem(_inventoryMakerProps::_InventoryMakerProps, _inventoryMakerProps._data[slotIndex]::ITEM_TYPE, targetContainer, slotIndex)
@@ -3149,12 +3282,21 @@ function InventoryMaker.DefineOnSizeChangedCallback(callback: OnSizeChangedCallb
 end
 
 --[[
-	Returns the reference to the item at the slotIndex or returns false if it's an empty slot.
+	Returns the reference to the item at the slotIndex or returns false if it's an empty slot,
+    and returns the slotGui and filledGui.
 ]]
-function InventoryMaker.GetItem(slotIndex: number): ITEM_TYPE | false
+function InventoryMaker.GetItem(slotIndex: number): (ITEM_TYPE | false, GuiObject?, GuiObject?)
 	if _inventoryMakerProps._data == nil then error("No inventory data.") end
+    if slotIndex < 1 or slotIndex > _inventoryMakerProps._capacity then error("slotIndex out of bounds") end
+
+    local targetContainer = getContainerFromSlotIndex(slotIndex, _inventoryMakerProps)
+    if not targetContainer then return false, nil, nil end
+
+    local slotGui = IMContainer.GetSlotFromSlotIndex(targetContainer, slotIndex)
+    local filledGui = IMContainer.GetFilledGuiFromIndex(targetContainer, slotIndex)
+    local item = _inventoryMakerProps._data[slotIndex]
 	
-	return _inventoryMakerProps._data[slotIndex]
+	return item, slotGui, filledGui
 end
 
 -- Return inventory current size

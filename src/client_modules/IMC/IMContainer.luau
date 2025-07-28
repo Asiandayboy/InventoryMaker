@@ -84,6 +84,7 @@ export type _HoverPromptInfo = {
 }
 
 export type ActivatedCallback = (item: ITEM_TYPE, filledGui: GuiObject, slotIndex: number) -> ()
+export type ActivatedCallbackNPCC = (item: ITEM_TYPE, filledGui: GuiObject, containerIndex: number) -> ()
 export type OnItemAddedCallback = (item: ITEM_TYPE, filledGui: GuiObject, info: ItemPositionInfo) -> ()
 export type AllowedItemsCallback = (item: ITEM_TYPE) -> boolean
 export type OnItemShiftedCallback = (item: ITEM_TYPE, info: ItemPositionInfo) -> ()
@@ -660,7 +661,7 @@ function IMContainer.AppendNewEmptySlots(container: _Container, amount: number)
 end
 
 
-function IMContainer.GetHoverPromptSingleton(container: _Container, screenGui: ScreenGui): GuiObject?
+function IMContainer.GetHoverPromptSingleton(container: _Container | _NPCContainer, screenGui: ScreenGui): GuiObject?
 	local hoverInfo = container._HOVER_INFO
 	if not hoverInfo then return nil end
 	
@@ -681,7 +682,7 @@ function IMContainer.GetHoverPromptSingleton(container: _Container, screenGui: S
 	return gui
 end
 
-function IMContainer.FixedHoverPrompt(container: _Container, prompt: GuiObject, item: ITEM_TYPE, filledGui: GuiObject)
+function IMContainer.FixedHoverPrompt(container: _Container | _NPCContainer, prompt: GuiObject, item: ITEM_TYPE, filledGui: GuiObject)
 	local hoverInfo = container._HOVER_INFO
 	if not hoverInfo then return end
 	
@@ -714,7 +715,7 @@ function IMContainer.FixedHoverPrompt(container: _Container, prompt: GuiObject, 
 	end
 end
 
-function IMContainer.NonFixedHoverPrompt(container: _Container, prompt: GuiObject, item: ITEM_TYPE, filledGui: GuiObject, mouse: Vector2)
+function IMContainer.NonFixedHoverPrompt(container: _Container | _NPCContainer, prompt: GuiObject, item: ITEM_TYPE, filledGui: GuiObject, mouse: Vector2)
 	local hoverInfo = container._HOVER_INFO
 	if not hoverInfo then return end
 	
@@ -753,7 +754,7 @@ function IMContainer.NonFixedHoverPrompt(container: _Container, prompt: GuiObjec
 	end
 end
 
-function IMContainer.HideHoverPrompt(container: _Container, prompt: GuiObject?)
+function IMContainer.HideHoverPrompt(prompt: GuiObject?)
 	if not prompt then return end
 	prompt.Visible = false
 end
@@ -802,5 +803,273 @@ function IMContainer.GetSlotIndexFromContainerIndex(container: _Container, conta
     return container._invStartIndex + containerIndex  - 1
 end
 
+---------------------------------------------------------
+-------------------[[ NPC Container ]]-------------------
+---------------------------------------------------------
+
+export type NPCContainer = {
+    --[[
+        Define the layout of the container, which is determined using a UIGridLayout.
+        At minimum, the `ParentContainer` field must be defined; it is the gui object
+        that the UIGridLayout will be parented to.
+
+            type GridLayoutParams = {
+                CellPadding: UDim2?,
+                CellSize: UDim2?,
+                FillDirection: Enum.FillDirection?,
+                FillDirectionMaxCells: number?,
+                StartCorner: Enum.StartCorner?,
+                HorizontalAlignment: Enum.HorizontalAlignment?,
+                VerticalAlignment: Enum.VerticalAlignment?,
+                ParentContainer: GuiObject
+            }
+    ]]
+	DefineLayout: (self: NPCContainer, params: GridLayoutParams) -> (),
+
+    --[[
+        Define how empty slots are rendered, providing a gui template and a render function.
+        The render function should only handle UI logic.  
+
+            type EmptyConfigs = {
+                GuiTemplate: GuiObject,
+                RenderFunc: (
+                    slotIndex: number, 
+                    emptyGui: GuiObject, 
+                    containerIndex: number
+                ) -> ()
+            }
+    ]]
+	DefineEmptySlot: (self: Container, configs: NPCCEmptyConfigs) -> (),
+
+    --[[
+        Define how filled slots are rendered, providing a gui template and a render function.
+        The render function should only handle UI logic.
+
+            type FilledConfigs = {
+                GuiTemplate: GuiObject,
+                RenderFunc: (
+                    slotIndex: number, 
+                    item: ITEM_TYPE, 
+                    filledGui: GuiObject, 
+                    containerIndex: number
+                ) -> ()
+            }
+    ]]
+	DefineFilledSlot: (self: NPCContainer, configs: FilledConfigs) -> (),
+
+    --[[
+        Define a callback that gets called whenever an item is activated in this container.
+        An item is activated when it is left-clicked (mobile), double-tapped (mobile, nonhotbar),
+        or tapped (mobile, tapped)
+
+            type ActivatedCallbackNPCC = (item: ITEM_TYPE, filledGui: GuiObject, containerIndex: number) -> ()
+    ]]
+	DefineActivatedCallback: (self: Container, callback: ActivatedCallbackNPCC) -> (),
+
+    --[[
+        Takes in a table that define how you want to configure your hover prompt. The GuiTemplate
+        defines the hover prompt gui to use for displaying the hover information. The RenderFunc defines
+        how you display the item information to the gui. It passes in the item data and the hover prompt gui.
+        
+        The GuiTmeplate is shared across all items; it's a singleton. So be sure to manage your properties 
+        appropriately. For example, if hovering over a rare item changes the color to blue, then you'd probably
+        change the color back to normal when hovering over a normal item. 
+        
+        You can provide just the GuiTemplate and RenderFunc and ignore the other fields if you wish to use 
+        the default values. It will default to FixedPosition = false and Offset = UDim2.new(0, 20, 0, 0).
+        
+        If FixedPosition = true, the hover prompt will be position to the top right corner of the 
+        inventory item. The offset will apply relative to the top right corner. If no offset is 
+        provided, it will default to UDim2.new(0, 0, 0, 0).
+        
+        If FixedPosition = false, the hover prompt will follow the mouse as long as it's moving within
+        the inventory item. The offset will apply relative to the mouse position.
+        
+        If ShowPromptAfterDragging is true, the hover prompt, if defined, will immediately appear after
+        dragging is done.
+    ]]
+	DefineHoverPrompt: (self: NPCContainer, configs: HoverPromptConfigs) -> (),
+
+    DefineOpen: (self: NPCContainer, func: (parentContainer: GuiObject, ...any) -> ()) -> (),
+
+    DefineClose: (self: NPCContainer, func: (parentContainer: GuiObject, ...any) -> ()) -> (),
+
+    --[[
+        Opens the NPC's inventory; renders onto the screen.
+    ]]
+    Open: (self: NPCContainer, ...any) -> (),
+
+    --[[
+        Closes the NPC's inventory; unrenders from the screen.
+    ]]
+    Close: (self: NPCContainer, ...any) -> (),
+}
+
+type NPCCEmptyConfigs = {
+    GuiTemplate: GuiObject,
+	RenderFunc: ((emptyGui: GuiObject, containerIndex: number) -> ())?
+}
+
+type NPCCFilledConfigs = {
+    GuiTemplate: GuiObject, 
+    RenderFunc: (item: ITEM_TYPE, filledGui: GuiObject, containerIndex: number) -> ()
+}
+
+export type _NPCContainer = {
+    _opened: boolean,
+    _name: string,
+    _capacity: number,
+    _data: { ITEM_TYPE },
+    _slotGuiObjs: { GuiObject },
+    _hoverPromptParent: ScreenGui,
+    _PARENT_CONTAINER: GuiObject,
+    _GRID_LAYOUT: UIGridLayout,
+    _EMPTY_TEMPLATE: GuiObject,
+    _FILLED_TEMPLATE: GuiObject,
+    _RENDER_EMPTY_FUNC: ((emptyGui: GuiObject, containerIndex: number) -> ())?,
+    _RENDER_FILLED_FUNC: (item: ITEM_TYPE, filledGui: GuiObject, containerIndex: number) -> (),
+
+    _HOVER_INFO: _HoverPromptInfo,
+
+    _CALLBACKS: {
+        _ON_OPENED_FUNC: (parentContainer: GuiObject, ...any) -> (),
+        _ON_CLOSED_FUNC: (parentContainer: GuiObject, ...any) -> (),
+        _ACTIVATED_FUNC: ActivatedCallbackNPCC,
+    }
+} & NPCContainer
+
+function IMContainer.NewNPCContainer(name: string, capacity: number): NPCContainer
+    local _props = {
+        _name = name,
+        _capacity = capacity,
+        _opened = false,
+        _CALLBACKS = {},
+        _slotGuiObjs = {},
+        
+        DefineLayout = function(self: _NPCContainer, params: GridLayoutParams)
+            if (params.ParentContainer::GuiObject?) == nil then error("[Inventory]: A parent GUI container must be provided for grid layout.") end
+			if not params.ParentContainer:IsA("GuiObject") then error("[Inventory]: The provided parent GUI container must be a GuiObject.") end
+			
+			local layout = Instance.new("UIGridLayout")
+			layout.Name = Constants.GRID_LAYOUT_NAME
+			layout.CellPadding = params.CellPadding or DEFAULT_CELL_PADDING
+			layout.CellSize = params.CellSize or DEFAULT_CELL_SIZE
+			layout.FillDirection = params.FillDirection or DEFAULT_FILL_DIRECTION
+			layout.FillDirectionMaxCells = params.FillDirectionMaxCells or DEFAULT_FILL_DIRECTION_MAX_CELLS
+			layout.StartCorner = params.StartCorner or DEFAULT_START_CORNER
+			layout.HorizontalAlignment = params.HorizontalAlignment or DEFAULT_H_ALIGN
+			layout.VerticalAlignment = params.VerticalAlignment or DEFAULT_V_ALIGN
+			layout.SortOrder = Enum.SortOrder.LayoutOrder
+			
+			self._PARENT_CONTAINER = params.ParentContainer
+			self._GRID_LAYOUT = layout
+        end,
+
+        DefineEmptySlot = function(self: _NPCContainer, configs: NPCCEmptyConfigs)
+            self._EMPTY_TEMPLATE = configs.GuiTemplate
+            self._RENDER_EMPTY_FUNC = configs.RenderFunc
+        end,
+
+        DefineFilledSlot = function(self: _NPCContainer, configs: NPCCFilledConfigs)
+            self._FILLED_TEMPLATE = configs.GuiTemplate
+			self._RENDER_FILLED_FUNC = configs.RenderFunc
+        end,
+
+        DefineActivatedCallback = function(self: _Container, callback: ActivatedCallbackNPCC)
+			self._CALLBACKS._ACTIVATED_FUNC = callback
+		end,
+
+        DefineHoverPrompt = function(self: _NPCContainer, configs: HoverPromptConfigs)
+            local offset: UDim2
+			if configs.Offset then
+				offset = UDim2.fromOffset(configs.Offset.X, configs.Offset.Y)
+			else
+				offset = UDim2.fromOffset(0, 0)
+			end
+			
+			self._HOVER_INFO = {
+				_TEMPLATE = configs.GuiTemplate,
+				_FIXED_POSITION = configs.FixedPosition or false,
+				_OFFSET = offset,
+				_RENDER_FUNC = configs.RenderFunc,
+				_OPEN_HOVER_PROMPT_AFTER_DRAGGING = configs.ShowPromptAfterDragging or false
+			}
+        end,
+
+        DefineOpen = function(self: _NPCContainer, func: (parentContainer: GuiObject, ...any) -> ())
+            self._CALLBACKS._ON_OPENED_FUNC = func
+        end,
+
+        DefineClose = function(self: _NPCContainer, func: (parentContainer: GuiObject, ...any) -> ())
+            self._CALLBACKS._ON_CLOSED_FUNC = func
+        end,
+
+        Open = function(self: _NPCContainer, ...: any)
+            if self._opened then return end
+            self._opened = true
+            self._CALLBACKS._ON_OPENED_FUNC(self._PARENT_CONTAINER, ...)
+        end,
+
+        Close = function(self: _NPCContainer, ...: any)
+            if not self._opened then return end
+            self._opened = false
+            self._CALLBACKS._ON_CLOSED_FUNC(self._PARENT_CONTAINER, ...)
+        end,
+    }
+
+    return _props::NPCContainer
+end
+
+local function createNPCCEmptySlot(npcContainer: _NPCContainer, containerIndex: number)
+    local gui = npcContainer._EMPTY_TEMPLATE:Clone()
+	if npcContainer._RENDER_EMPTY_FUNC then
+		npcContainer._RENDER_EMPTY_FUNC(gui, containerIndex)
+	end
+	gui.Name = Constants.SLOT_NAME_PREFIX..tostring(containerIndex)
+	gui.LayoutOrder = containerIndex
+	gui.Visible = true
+	gui.Parent = npcContainer._PARENT_CONTAINER
+
+	return gui
+end
+
+local function createNPCCFilledSlot(npcContainer: _NPCContainer, item: ITEM_TYPE, containerIndex: number): (GuiObject, GuiObject)
+    local slot = createNPCCEmptySlot(npcContainer, containerIndex)
+
+	local filledSlotGui = npcContainer._FILLED_TEMPLATE:Clone()
+	filledSlotGui.Visible = true
+    npcContainer._RENDER_FILLED_FUNC(item, filledSlotGui, containerIndex)
+	filledSlotGui.Name = Constants.FILLED_GUI_NAME
+	filledSlotGui.Parent = slot
+
+	return filledSlotGui, slot
+end
+
+function IMContainer.InitNPCContainer(npcContainer: _NPCContainer, npcContainerData: { ITEM_TYPE }, 
+    onFilledSlotCreatedCallback: (filledGui: GuiObject, containerIndex: number) -> ()
+)
+    if #npcContainerData > npcContainer._capacity then
+        error("the provided npc inventory data length exceeds the NPCContainer capacity.")
+    end
+    
+    for i, item in npcContainerData do
+        if not item then continue end
+
+        local filledGui, slotGui = createNPCCFilledSlot(npcContainer, item, i)
+        table.insert(npcContainer._slotGuiObjs, slotGui)
+        onFilledSlotCreatedCallback(filledGui, i)
+    end
+
+    npcContainer._data = npcContainerData
+    npcContainer._GRID_LAYOUT.Parent = npcContainer._PARENT_CONTAINER
+end
+
+function IMContainer.DestroyNPCContainer(npcContainer: _NPCContainer)
+    for i, v in npcContainer._slotGuiObjs do
+        v:Destroy()
+    end
+    table.clear(npcContainer._slotGuiObjs)
+    table.clear(npcContainer::{ [string]: any })
+end
 
 return IMContainer
