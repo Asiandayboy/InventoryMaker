@@ -10,6 +10,9 @@
 	-----------------------------------------------------------------------------
 	InventoryMakerServer (IMS)
 	-----------------------------------------------------------------------------
+    v1.3.1 Update Log (7/27/25)
+        - [New Method]: Inventory:GetItem()
+
     v1.2.1 Update Log (6/8/25)
         - No updates for IMS
         
@@ -342,6 +345,12 @@ export type Inventory = {
         Returns the reference to the underlying inventory data array 
     ]]
     Items: (self: Inventory) -> _DATA,
+
+    --[[
+        Returns the reference to the item at the slotIndex or false if it's an empty slot.
+        Nil is returned if the slotIndex is out of bounds.
+    ]]
+    GetItem: (self: Inventory, slotIndex: number) -> (ITEM_TYPE | false)?,
 
     --[[ 
         Returns the inventory's current size 
@@ -1054,6 +1063,14 @@ function Inventory.new(capacity: number, inventoryData: _DATA): Inventory
 	function props.Items(self: _Inventory): _DATA
 		return self._data
 	end
+
+    function props.GetItem(self: _Inventory, slotIndex: number): (ITEM_TYPE | false)?
+        if slotIndex <= 0 or slotIndex > self._capacity then 
+            debugWarn("slotIndex out of bounds")
+            return nil
+        end
+        return self._data[slotIndex]
+    end
 	
 	function props.Size(self: _Inventory): number
 		return self._currSize
