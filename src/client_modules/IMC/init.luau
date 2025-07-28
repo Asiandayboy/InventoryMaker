@@ -1353,15 +1353,21 @@ local function connectActivatedEventForNPCC(npcContainer: IMContainer._NPCContai
     local activatedFunc = npcContainer._CALLBACKS._ACTIVATED_FUNC
     if not activatedFunc then return end
 
-    filledGui.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            local item = npcContainer._data[containerIndex]
-            
-            if activatedFunc then
+    local input = IMInput.GetInputType()
+
+    if input == IMInput.INPUT_MOUSE then
+        filledGui.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                local item = npcContainer._data[containerIndex]
                 activatedFunc(item, filledGui, containerIndex)
             end
-        end
-    end)
+        end)
+    elseif input == IMInput.INPUT_TOUCH then
+        filledGui.TouchTap:Connect(function()
+            local item = npcContainer._data[containerIndex]
+            activatedFunc(item, filledGui, containerIndex)
+        end)
+    end
 end
 
 --[[
@@ -2365,6 +2371,9 @@ end
 ]]
 function InventoryMaker.BuildNPCContainer(npcContainer: IMContainer._NPCContainer, npcContainerData: { ITEM_TYPE })
     IMContainer.InitNPCContainer(npcContainer, npcContainerData, function(filledGui: GuiObject, containerIndex: number)  
+        if IMInput.GetInputType() == IMInput.INPUT_TOUCH then
+            filledGui.Active = true
+        end
         connectActivatedEventForNPCC(npcContainer, filledGui, containerIndex)
         connectFilledSlotHoverEventsForNPCC(_inventoryMakerProps, npcContainer, filledGui, containerIndex)
     end)
