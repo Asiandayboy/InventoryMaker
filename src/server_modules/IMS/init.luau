@@ -4,13 +4,13 @@
 --[[ InventoryMaker
 
 	Created by: robloxdestroyer1035
-	Version: v1.2.1
-	Last Updated: 6/8/25
+	Version: v1.3.0
+	Last Updated: 7/30/25
 
 	-----------------------------------------------------------------------------
 	InventoryMakerServer (IMS)
 	-----------------------------------------------------------------------------
-    v1.3.1 Update Log (7/27/25)
+    v1.3.0 Update Log (7/30/25)
         - [New Method]: Inventory:GetItem()
 
     v1.2.1 Update Log (6/8/25)
