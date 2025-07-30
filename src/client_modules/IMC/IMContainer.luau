@@ -84,7 +84,7 @@ export type _HoverPromptInfo = {
 }
 
 export type ActivatedCallback = (item: ITEM_TYPE, filledGui: GuiObject, slotIndex: number) -> ()
-export type ActivatedCallbackNPCC = (item: ITEM_TYPE, filledGui: GuiObject, containerIndex: number) -> ()
+export type ActivatedCallbackStatic = (item: ITEM_TYPE, filledGui: GuiObject, containerIndex: number) -> ()
 export type OnItemAddedCallback = (item: ITEM_TYPE, filledGui: GuiObject, info: ItemPositionInfo) -> ()
 export type AllowedItemsCallback = (item: ITEM_TYPE) -> boolean
 export type OnItemShiftedCallback = (item: ITEM_TYPE, info: ItemPositionInfo) -> ()
@@ -661,7 +661,7 @@ function IMContainer.AppendNewEmptySlots(container: _Container, amount: number)
 end
 
 
-function IMContainer.GetHoverPromptSingleton(container: _Container | _NPCContainer, screenGui: ScreenGui): GuiObject?
+function IMContainer.GetHoverPromptSingleton(container: _Container | _StaticContainer, screenGui: ScreenGui): GuiObject?
 	local hoverInfo = container._HOVER_INFO
 	if not hoverInfo then return nil end
 	
@@ -682,7 +682,7 @@ function IMContainer.GetHoverPromptSingleton(container: _Container | _NPCContain
 	return gui
 end
 
-function IMContainer.FixedHoverPrompt(container: _Container | _NPCContainer, prompt: GuiObject, item: ITEM_TYPE, filledGui: GuiObject)
+function IMContainer.FixedHoverPrompt(container: _Container | _StaticContainer, prompt: GuiObject, item: ITEM_TYPE, filledGui: GuiObject)
 	local hoverInfo = container._HOVER_INFO
 	if not hoverInfo then return end
 	
@@ -715,7 +715,7 @@ function IMContainer.FixedHoverPrompt(container: _Container | _NPCContainer, pro
 	end
 end
 
-function IMContainer.NonFixedHoverPrompt(container: _Container | _NPCContainer, prompt: GuiObject, item: ITEM_TYPE, filledGui: GuiObject, mouse: Vector2)
+function IMContainer.NonFixedHoverPrompt(container: _Container | _StaticContainer, prompt: GuiObject, item: ITEM_TYPE, filledGui: GuiObject, mouse: Vector2)
 	local hoverInfo = container._HOVER_INFO
 	if not hoverInfo then return end
 	
@@ -803,11 +803,11 @@ function IMContainer.GetSlotIndexFromContainerIndex(container: _Container, conta
     return container._invStartIndex + containerIndex  - 1
 end
 
----------------------------------------------------------
--------------------[[ NPC Container ]]-------------------
----------------------------------------------------------
+------------------------------------------------------------
+-------------------[[ Static Container ]]-------------------
+------------------------------------------------------------
 
-export type NPCContainer = {
+export type StaticContainer = {
     --[[
         Define the layout of the container, which is determined using a UIGridLayout.
         At minimum, the `ParentContainer` field must be defined; it is the gui object
@@ -824,47 +824,45 @@ export type NPCContainer = {
                 ParentContainer: GuiObject
             }
     ]]
-	DefineLayout: (self: NPCContainer, params: GridLayoutParams) -> (),
+	DefineLayout: (self: StaticContainer, params: GridLayoutParams) -> (),
 
     --[[
         Define how empty slots are rendered, providing a gui template and a render function.
         The render function should only handle UI logic.  
 
-            type EmptyConfigs = {
+            type StaticContainerEmptyConfigs = {
                 GuiTemplate: GuiObject,
-                RenderFunc: (
-                    slotIndex: number, 
+                RenderFunc: ((
                     emptyGui: GuiObject, 
                     containerIndex: number
-                ) -> ()
+                ) -> ())?
             }
     ]]
-	DefineEmptySlot: (self: Container, configs: NPCCEmptyConfigs) -> (),
+	DefineEmptySlot: (self: Container, configs: StaticContainerEmptyConfigs) -> (),
 
     --[[
         Define how filled slots are rendered, providing a gui template and a render function.
         The render function should only handle UI logic.
 
-            type FilledConfigs = {
-                GuiTemplate: GuiObject,
+            type StaticContainerFilledConfigs = {
+                GuiTemplate: GuiObject, 
                 RenderFunc: (
-                    slotIndex: number, 
                     item: ITEM_TYPE, 
                     filledGui: GuiObject, 
                     containerIndex: number
                 ) -> ()
             }
     ]]
-	DefineFilledSlot: (self: NPCContainer, configs: FilledConfigs) -> (),
+	DefineFilledSlot: (self: StaticContainer, configs: StaticContainerFilledConfigs) -> (),
 
     --[[
         Define a callback that gets called whenever an item is activated in this container.
         An item is activated when it is left-clicked (mobile), double-tapped (mobile, nonhotbar),
         or tapped (mobile, tapped)
 
-            type ActivatedCallbackNPCC = (item: ITEM_TYPE, filledGui: GuiObject, containerIndex: number) -> ()
+            type ActivatedCallbackStatic = (item: ITEM_TYPE, filledGui: GuiObject, containerIndex: number) -> ()
     ]]
-	DefineActivatedCallback: (self: Container, callback: ActivatedCallbackNPCC) -> (),
+	DefineActivatedCallback: (self: Container, callback: ActivatedCallbackStatic) -> (),
 
     --[[
         Takes in a table that define how you want to configure your hover prompt. The GuiTemplate
@@ -884,38 +882,35 @@ export type NPCContainer = {
         
         If FixedPosition = false, the hover prompt will follow the mouse as long as it's moving within
         the inventory item. The offset will apply relative to the mouse position.
-        
-        If ShowPromptAfterDragging is true, the hover prompt, if defined, will immediately appear after
-        dragging is done.
     ]]
-	DefineHoverPrompt: (self: NPCContainer, configs: HoverPromptConfigs) -> (),
+	DefineHoverPrompt: (self: StaticContainer, configs: HoverPromptConfigs) -> (),
 
-    DefineOpen: (self: NPCContainer, func: (parentContainer: GuiObject, ...any) -> ()) -> (),
+    DefineOpen: (self: StaticContainer, func: (parentContainer: GuiObject, ...any) -> ()) -> (),
 
-    DefineClose: (self: NPCContainer, func: (parentContainer: GuiObject, ...any) -> ()) -> (),
+    DefineClose: (self: StaticContainer, func: (parentContainer: GuiObject, ...any) -> ()) -> (),
 
     --[[
-        Opens the NPC's inventory; renders onto the screen.
+        Opens the static container's inventory; renders onto the screen.
     ]]
-    Open: (self: NPCContainer, ...any) -> (),
+    Open: (self: StaticContainer, ...any) -> (),
 
     --[[
-        Closes the NPC's inventory; unrenders from the screen.
+        Closes the static inventory's inventory; unrenders from the screen.
     ]]
-    Close: (self: NPCContainer, ...any) -> (),
+    Close: (self: StaticContainer, ...any) -> (),
 }
 
-type NPCCEmptyConfigs = {
+type StaticContainerEmptyConfigs = {
     GuiTemplate: GuiObject,
 	RenderFunc: ((emptyGui: GuiObject, containerIndex: number) -> ())?
 }
 
-type NPCCFilledConfigs = {
+type StaticContainerFilledConfigs = {
     GuiTemplate: GuiObject, 
     RenderFunc: (item: ITEM_TYPE, filledGui: GuiObject, containerIndex: number) -> ()
 }
 
-export type _NPCContainer = {
+export type _StaticContainer = {
     _opened: boolean,
     _name: string,
     _capacity: number,
@@ -934,11 +929,11 @@ export type _NPCContainer = {
     _CALLBACKS: {
         _ON_OPENED_FUNC: (parentContainer: GuiObject, ...any) -> (),
         _ON_CLOSED_FUNC: (parentContainer: GuiObject, ...any) -> (),
-        _ACTIVATED_FUNC: ActivatedCallbackNPCC,
+        _ACTIVATED_FUNC: ActivatedCallbackStatic,
     }
-} & NPCContainer
+} & StaticContainer
 
-function IMContainer.NewNPCContainer(name: string, capacity: number): NPCContainer
+function IMContainer.NewStaticContainer(name: string, capacity: number): StaticContainer
     local _props = {
         _name = name,
         _capacity = capacity,
@@ -946,7 +941,7 @@ function IMContainer.NewNPCContainer(name: string, capacity: number): NPCContain
         _CALLBACKS = {},
         _slotGuiObjs = {},
         
-        DefineLayout = function(self: _NPCContainer, params: GridLayoutParams)
+        DefineLayout = function(self: _StaticContainer, params: GridLayoutParams)
             if (params.ParentContainer::GuiObject?) == nil then error("[Inventory]: A parent GUI container must be provided for grid layout.") end
 			if not params.ParentContainer:IsA("GuiObject") then error("[Inventory]: The provided parent GUI container must be a GuiObject.") end
 			
@@ -965,21 +960,21 @@ function IMContainer.NewNPCContainer(name: string, capacity: number): NPCContain
 			self._GRID_LAYOUT = layout
         end,
 
-        DefineEmptySlot = function(self: _NPCContainer, configs: NPCCEmptyConfigs)
+        DefineEmptySlot = function(self: _StaticContainer, configs: StaticContainerEmptyConfigs)
             self._EMPTY_TEMPLATE = configs.GuiTemplate
             self._RENDER_EMPTY_FUNC = configs.RenderFunc
         end,
 
-        DefineFilledSlot = function(self: _NPCContainer, configs: NPCCFilledConfigs)
+        DefineFilledSlot = function(self: _StaticContainer, configs: StaticContainerFilledConfigs)
             self._FILLED_TEMPLATE = configs.GuiTemplate
 			self._RENDER_FILLED_FUNC = configs.RenderFunc
         end,
 
-        DefineActivatedCallback = function(self: _Container, callback: ActivatedCallbackNPCC)
+        DefineActivatedCallback = function(self: _Container, callback: ActivatedCallbackStatic)
 			self._CALLBACKS._ACTIVATED_FUNC = callback
 		end,
 
-        DefineHoverPrompt = function(self: _NPCContainer, configs: HoverPromptConfigs)
+        DefineHoverPrompt = function(self: _StaticContainer, configs: HoverPromptConfigs)
             local offset: UDim2
 			if configs.Offset then
 				offset = UDim2.fromOffset(configs.Offset.X, configs.Offset.Y)
@@ -996,80 +991,80 @@ function IMContainer.NewNPCContainer(name: string, capacity: number): NPCContain
 			}
         end,
 
-        DefineOpen = function(self: _NPCContainer, func: (parentContainer: GuiObject, ...any) -> ())
+        DefineOpen = function(self: _StaticContainer, func: (parentContainer: GuiObject, ...any) -> ())
             self._CALLBACKS._ON_OPENED_FUNC = func
         end,
 
-        DefineClose = function(self: _NPCContainer, func: (parentContainer: GuiObject, ...any) -> ())
+        DefineClose = function(self: _StaticContainer, func: (parentContainer: GuiObject, ...any) -> ())
             self._CALLBACKS._ON_CLOSED_FUNC = func
         end,
 
-        Open = function(self: _NPCContainer, ...: any)
+        Open = function(self: _StaticContainer, ...: any)
             if self._opened then return end
             self._opened = true
             self._CALLBACKS._ON_OPENED_FUNC(self._PARENT_CONTAINER, ...)
         end,
 
-        Close = function(self: _NPCContainer, ...: any)
+        Close = function(self: _StaticContainer, ...: any)
             if not self._opened then return end
             self._opened = false
             self._CALLBACKS._ON_CLOSED_FUNC(self._PARENT_CONTAINER, ...)
         end,
     }
 
-    return _props::NPCContainer
+    return _props::StaticContainer
 end
 
-local function createNPCCEmptySlot(npcContainer: _NPCContainer, containerIndex: number)
-    local gui = npcContainer._EMPTY_TEMPLATE:Clone()
-	if npcContainer._RENDER_EMPTY_FUNC then
-		npcContainer._RENDER_EMPTY_FUNC(gui, containerIndex)
+local function createStaticContainerEmptySlot(staticContainer: _StaticContainer, containerIndex: number)
+    local gui = staticContainer._EMPTY_TEMPLATE:Clone()
+	if staticContainer._RENDER_EMPTY_FUNC then
+		staticContainer._RENDER_EMPTY_FUNC(gui, containerIndex)
 	end
 	gui.Name = Constants.SLOT_NAME_PREFIX..tostring(containerIndex)
 	gui.LayoutOrder = containerIndex
 	gui.Visible = true
-	gui.Parent = npcContainer._PARENT_CONTAINER
+	gui.Parent = staticContainer._PARENT_CONTAINER
 
 	return gui
 end
 
-local function createNPCCFilledSlot(npcContainer: _NPCContainer, item: ITEM_TYPE, containerIndex: number): (GuiObject, GuiObject)
-    local slot = createNPCCEmptySlot(npcContainer, containerIndex)
+local function createStaticContainerFilledSlot(staticContainer: _StaticContainer, item: ITEM_TYPE, containerIndex: number): (GuiObject, GuiObject)
+    local slot = createStaticContainerEmptySlot(staticContainer, containerIndex)
 
-	local filledSlotGui = npcContainer._FILLED_TEMPLATE:Clone()
+	local filledSlotGui = staticContainer._FILLED_TEMPLATE:Clone()
 	filledSlotGui.Visible = true
-    npcContainer._RENDER_FILLED_FUNC(item, filledSlotGui, containerIndex)
+    staticContainer._RENDER_FILLED_FUNC(item, filledSlotGui, containerIndex)
 	filledSlotGui.Name = Constants.FILLED_GUI_NAME
 	filledSlotGui.Parent = slot
 
 	return filledSlotGui, slot
 end
 
-function IMContainer.InitNPCContainer(npcContainer: _NPCContainer, npcContainerData: { ITEM_TYPE }, 
+function IMContainer.InitStaticContainer(staticContainer: _StaticContainer, staticContainerData: { ITEM_TYPE }, 
     onFilledSlotCreatedCallback: (filledGui: GuiObject, containerIndex: number) -> ()
 )
-    if #npcContainerData > npcContainer._capacity then
-        error("the provided npc inventory data length exceeds the NPCContainer capacity.")
+    if #staticContainerData > staticContainer._capacity then
+        error("the provided inventory data length exceeds the static container capacity.")
     end
     
-    for i, item in npcContainerData do
+    for i, item in staticContainerData do
         if not item then continue end
 
-        local filledGui, slotGui = createNPCCFilledSlot(npcContainer, item, i)
-        table.insert(npcContainer._slotGuiObjs, slotGui)
+        local filledGui, slotGui = createStaticContainerFilledSlot(staticContainer, item, i)
+        table.insert(staticContainer._slotGuiObjs, slotGui)
         onFilledSlotCreatedCallback(filledGui, i)
     end
 
-    npcContainer._data = npcContainerData
-    npcContainer._GRID_LAYOUT.Parent = npcContainer._PARENT_CONTAINER
+    staticContainer._data = staticContainerData
+    staticContainer._GRID_LAYOUT.Parent = staticContainer._PARENT_CONTAINER
 end
 
-function IMContainer.DestroyNPCContainer(npcContainer: _NPCContainer)
-    for i, v in npcContainer._slotGuiObjs do
+function IMContainer.DestroyStaticContainer(staticContainer: _StaticContainer)
+    for i, v in staticContainer._slotGuiObjs do
         v:Destroy()
     end
-    table.clear(npcContainer._slotGuiObjs)
-    table.clear(npcContainer::{ [string]: any })
+    table.clear(staticContainer._slotGuiObjs)
+    table.clear(staticContainer::{ [string]: any })
 end
 
 return IMContainer

@@ -6,28 +6,28 @@
 --[[ InventoryMaker
 	
 	Created by: robloxdestroyer1035
-	Version: v1.2.1
-	Last Updated: 6/8/25
+	Version: v1.3.0
+	Last Updated: 7/30/25
 	
 	-----------------------------------------------------------------------------
 	InventoryMakerClient (IMC)
 	-----------------------------------------------------------------------------
-    v1.3.1 Update Log (7/27/25)
-        - [New Feature]: NPC Containers; used to render and interact with npc inventories. I made
+    v1.3.0 Update Log (7/30/25)
+        - [New Feature]: Static Containers; used to render and interact with static inventories. I made
             this primarily to easily create merchant NPCs that you can sell to and buy from.
             New Methods:
-                - IMC.NPCContainer(name: string, capacity: number): NPCContainer
-                    - NPCContainer:DefineLayout()
-                    - NPCContainer:DefineEmptySlot()
-                    - NPCContainer:DefineFilledSlot()
-                    - NPCContainer:DefineActivatedCallback()
-                    - NPCContainer:DefineHoverPrompt()
-                    - NPCContainer:DefineOpen()
-                    - NPCContainer:DefineClose()
-                    - NPCContainer:Open()
-                    - NPCContainer:Close()
-                - IMC.BuildNPCContainer(NPCContainer)
-                - IMC.DestroyNPCContainer(NPCContainer)
+                - IMC.StaticContainer()
+                    - StaticContainer:DefineLayout()
+                    - StaticContainer:DefineEmptySlot()
+                    - StaticContainer:DefineFilledSlot()
+                    - StaticContainer:DefineActivatedCallback()
+                    - StaticContainer:DefineHoverPrompt()
+                    - StaticContainer:DefineOpen()
+                    - StaticContainer:DefineClose()
+                    - StaticContainer:Open()
+                    - StaticContainer:Close()
+                - IMC.BuildStaticContainer()
+                - IMC.DestroyStaticContainer()
         - [Changed]: OnToggledCallback accepts varargs, passed through IMC.ToggleInventory(), 
             IMC.ToggleOn(), and IMC.ToggleOff()
         - [Changed]: IMC.GetItem() now also returns the slotGui and filledGui
@@ -275,11 +275,11 @@ local InventoryMaker = {
 
 IMHotbar.DEBUG_PRINT = InventoryMaker.DEBUG_PRINT_KEYBIND_MESSAGES
 
-export type NPCContainer = IMContainer.NPCContainer
+export type StaticContainer = IMContainer.StaticContainer
 export type ItemPositionInfo = IMContainer.ItemPositionInfo
 export type ITEM_TYPE = IMUserType.USER_ITEM_TYPE
 
-type _NPCContainer = IMContainer._NPCContainer
+type _StaticContainer = IMContainer._StaticContainer
 
 type _DATA = { ITEM_TYPE | false }
 
@@ -1346,11 +1346,11 @@ end
 
 
 --[[
-    This function assumes NPC items are fixed in position, never changing in order in the array
-    during runtime
+    This function assumes the items are fixed in position, never changing in order in the array
+    during runtime, hence the "static"
 ]]
-local function connectActivatedEventForNPCC(npcContainer: IMContainer._NPCContainer, filledGui: GuiObject, containerIndex: number)
-    local activatedFunc = npcContainer._CALLBACKS._ACTIVATED_FUNC
+local function connectActivatedEventForStaticContainer(staticContainer: IMContainer._StaticContainer, filledGui: GuiObject, containerIndex: number)
+    local activatedFunc = staticContainer._CALLBACKS._ACTIVATED_FUNC
     if not activatedFunc then return end
 
     local input = IMInput.GetInputType()
@@ -1358,44 +1358,44 @@ local function connectActivatedEventForNPCC(npcContainer: IMContainer._NPCContai
     if input == IMInput.INPUT_MOUSE then
         filledGui.InputBegan:Connect(function(input)
             if input.UserInputType == Enum.UserInputType.MouseButton1 then
-                local item = npcContainer._data[containerIndex]
+                local item = staticContainer._data[containerIndex]
                 activatedFunc(item, filledGui, containerIndex)
             end
         end)
     elseif input == IMInput.INPUT_TOUCH then
         filledGui.TouchTap:Connect(function()
-            local item = npcContainer._data[containerIndex]
+            local item = staticContainer._data[containerIndex]
             activatedFunc(item, filledGui, containerIndex)
         end)
     end
 end
 
 --[[
-    This function assumes NPC items are fixed in position, never changing in order in the array
-    during runtime
+    This function assumes the items are fixed in position, never changing in order in the array
+    during runtime, hence the "static"
 ]]
-local function connectFilledSlotHoverEventsForNPCC(props: _InventoryMakerProps,
-    npcContainer: IMContainer._NPCContainer,
+local function connectFilledSlotHoverEventsForStaticContainer(props: _InventoryMakerProps,
+    staticContainer: IMContainer._StaticContainer,
     filledGui: GuiObject,
     containerIndex: number
 )
-    local hoverInfo  = npcContainer._HOVER_INFO
+    local hoverInfo  = staticContainer._HOVER_INFO
     if not hoverInfo then return end
 
     local fixedPos = hoverInfo._FIXED_POSITION
-    local prompt = IMContainer.GetHoverPromptSingleton(npcContainer, props._PARENT_CONTAINER_SCREEN_GUI)
+    local prompt = IMContainer.GetHoverPromptSingleton(staticContainer, props._PARENT_CONTAINER_SCREEN_GUI)
     if not prompt then return end
     
     if fixedPos then
    		filledGui.InputBegan:Connect(function(input)
 			if IMInput.IsInputActive(IMInput.HOVER_PROMPT_START, input) and not areContextMenusOpened(props._contextMenusOpened) then
-                local item = npcContainer._data[containerIndex]
+                local item = staticContainer._data[containerIndex]
 				
 				if props._dragging then return end
 				if isItemActiveSlot(props::_InventoryMakerProps, item) then return end
 				setActiveSlot(props::_InventoryMakerProps, item, filledGui)
 				
-				IMContainer.FixedHoverPrompt(npcContainer, prompt, item, filledGui)
+				IMContainer.FixedHoverPrompt(staticContainer, prompt, item, filledGui)
 			end
 		end)     
     else
@@ -1403,12 +1403,12 @@ local function connectFilledSlotHoverEventsForNPCC(props: _InventoryMakerProps,
 			if IMInput.IsInputActive(IMInput.HOVER_PROMPT_START, input) and not areContextMenusOpened(props._contextMenusOpened) then
 				if props._dragging then return end
 
-                local item = npcContainer._data[containerIndex]
+                local item = staticContainer._data[containerIndex]
 				if not props._activeSlot then
 					setActiveSlot(props::_InventoryMakerProps, item, filledGui)
 				end
 				
-				IMContainer.NonFixedHoverPrompt(npcContainer, prompt, item, filledGui, UIS:GetMouseLocation())
+				IMContainer.NonFixedHoverPrompt(staticContainer, prompt, item, filledGui, UIS:GetMouseLocation())
 			end
 		end)
     end
@@ -1421,7 +1421,7 @@ local function connectFilledSlotHoverEventsForNPCC(props: _InventoryMakerProps,
                 if filledGui.Parent == nil then return end
             end
 
-            local item = npcContainer._data[containerIndex]
+            local item = staticContainer._data[containerIndex]
             if isItemActiveSlot(props::_InventoryMakerProps, item) then
                 IMContainer.HideHoverPrompt(prompt)		
                 setActiveSlot(props::_InventoryMakerProps, nil)
@@ -2147,14 +2147,14 @@ function InventoryMaker.Container(name: string, capacity: number, flags: number?
 end
 
 --[[
-    Creates a new container for NPCs, which is used to render their inventories to allow
-    for the player to interact with it with their inventory.
+    Creates a new static container, which is used to render static inventories and 
+    allows for the player to interact with it with their inventory.
 
     The first arg, **name**, should be a unique name for the contianer
     The second arg, **capacity**, is the max size of the inventory.
 ]]
-function InventoryMaker.NPCContainer(name: string, capacity: number): IMContainer.NPCContainer
-    return IMContainer.NewNPCContainer(name, capacity)
+function InventoryMaker.StaticContainer(name: string, capacity: number): IMContainer.StaticContainer
+    return IMContainer.NewStaticContainer(name, capacity)
 end
 
 --[[
@@ -2366,25 +2366,26 @@ function InventoryMaker.Build(containers: { IMContainer._Container }, itemspace:
 end
 
 --[[
-    Builds the NPC container after the container has been configured, and takes in the inventory data of the NPC
-    to render.
+    Builds the static container after it has been configured, and takes in an 
+    inventory data to render.
 ]]
-function InventoryMaker.BuildNPCContainer(npcContainer: IMContainer._NPCContainer, npcContainerData: { ITEM_TYPE })
-    IMContainer.InitNPCContainer(npcContainer, npcContainerData, function(filledGui: GuiObject, containerIndex: number)  
+function InventoryMaker.BuildStaticContainer(staticContainer: IMContainer._StaticContainer, staticContainerData: { ITEM_TYPE })
+    IMContainer.InitStaticContainer(staticContainer, staticContainerData, function(filledGui: GuiObject, containerIndex: number)  
         if IMInput.GetInputType() == IMInput.INPUT_TOUCH then
             filledGui.Active = true
         end
-        connectActivatedEventForNPCC(npcContainer, filledGui, containerIndex)
-        connectFilledSlotHoverEventsForNPCC(_inventoryMakerProps, npcContainer, filledGui, containerIndex)
+        connectActivatedEventForStaticContainer(staticContainer, filledGui, containerIndex)
+        connectFilledSlotHoverEventsForStaticContainer(_inventoryMakerProps, staticContainer, filledGui, containerIndex)
     end)
 end
 
 --[[
-    Calls the npcContainer:Close() method and then destroys the NPC container entirely, removing it from memory.
+    Calls the :Close() method on the static container and then destroys the 
+    container entirely, removing it from memory.
 ]]
-function InventoryMaker.DestroyNPCContainer(npcContainer: IMContainer._NPCContainer)
-    npcContainer:Close()
-    IMContainer.DestroyNPCContainer(npcContainer)
+function InventoryMaker.DestroyStaticContainer(staticContainer: IMContainer._StaticContainer)
+    staticContainer:Close()
+    IMContainer.DestroyStaticContainer(staticContainer)
 end
 
 --[[
