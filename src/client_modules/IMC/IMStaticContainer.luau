@@ -306,11 +306,14 @@ function StaticContainer.InitStaticContainer(staticContainer: _StaticContainer, 
     end
     
     for i, item in staticContainerData do
-        if not item then continue end
-
-        local filledGui, slotGui = createStaticContainerFilledSlot(staticContainer, item, i)
-        table.insert(staticContainer._slotGuiObjs, slotGui)
-        onFilledSlotCreatedCallback(filledGui, i)
+        if not item then 
+            local slotGui = createStaticContainerEmptySlot(staticContainer, i)
+            table.insert(staticContainer._slotGuiObjs, slotGui)
+        else
+            local filledGui, slotGui = createStaticContainerFilledSlot(staticContainer, item, i)
+            table.insert(staticContainer._slotGuiObjs, slotGui)
+            onFilledSlotCreatedCallback(filledGui, i)
+        end
     end
 
     staticContainer._data = staticContainerData
