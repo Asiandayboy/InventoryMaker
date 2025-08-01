@@ -19,7 +19,7 @@ local IMContainer = {
 }
 
 
-local camera = workspace.Camera
+local camera = (workspace::{ Camera: Camera }).Camera
 
 local DraggableUI = require(script.Parent.IMDraggableUI)
 local Constants = require(script.Parent.IMConstants)
@@ -50,7 +50,7 @@ export type ItemPositionInfo = {
 
 export type EmptyConfigs = {
 	GuiTemplate: GuiObject,
-	RenderFunc: (slotIndex: number, emptyGui: GuiObject, containerIndex: number) -> ()
+	RenderFunc: ((slotIndex: number, emptyGui: GuiObject, containerIndex: number) -> ())?
 }
 
 export type FilledConfigs = {
@@ -272,7 +272,7 @@ export type _Container = {
 	_GRID_LAYOUT: UIGridLayout,
 	_EMPTY_TEMPLATE: GuiObject,
 	_FILLED_TEMPLATE: GuiObject,
-	_RENDER_EMPTY_FUNC: (slotIndex: number, emptyGui: GuiObject, containerIndex: number) -> (),
+	_RENDER_EMPTY_FUNC: ((slotIndex: number, emptyGui: GuiObject, containerIndex: number) -> ())?,
 	_RENDER_FILLED_FUNC: (slotIndex: number, item: ITEM_TYPE, filledGui: GuiObject, containerIndex: number) -> (),
 	_HOVER_INFO: _HoverPromptInfo?,
 	
@@ -461,7 +461,7 @@ function IMContainer.new(name: string, capacity: number, flags: number): Contain
 		
 		DefineEmptySlot = function(self: _Container, configs: EmptyConfigs)
 			self._EMPTY_TEMPLATE = configs.GuiTemplate
-			self._RENDER_EMPTY_FUNC = configs.RenderFunc
+			self._RENDER_EMPTY_FUNC = configs.RenderFunc or nil
 		end,
 		
 		DefineFilledSlot = function(self: _Container, configs: FilledConfigs)
@@ -781,7 +781,10 @@ function IMContainer.UpdateSlotIndexOfSlot(container: _Container, oldSlotIndex: 
 	local slot = container._slotGuiObjs[containerIndex]
 	if not slot then error("No slot to update") end
 	
-	container._RENDER_EMPTY_FUNC(newSlotIndex, slot, containerIndex)
+    local renderEmptyFunc = container._RENDER_EMPTY_FUNC
+    if renderEmptyFunc then
+        renderEmptyFunc(newSlotIndex, slot, containerIndex)
+    end
 	slot:SetAttribute(Constants.SLOT_INDEX_ATTRIBUTE_NAME, newSlotIndex)
 	slot.LayoutOrder = newSlotIndex
 	slot.Name = Constants.SLOT_NAME_PREFIX..tostring(newSlotIndex)

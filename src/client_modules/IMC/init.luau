@@ -159,7 +159,7 @@
 
 local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
-local camera = workspace.Camera
+local camera = (workspace::{ Camera: Camera }).Camera
 local player = Players.LocalPlayer::Player
 
 
