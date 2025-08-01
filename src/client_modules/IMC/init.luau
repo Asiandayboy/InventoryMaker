@@ -7,12 +7,12 @@
 	
 	Created by: robloxdestroyer1035
 	Version: v1.3.0
-	Last Updated: 7/30/25
+	Last Updated: 8/1/25
 	
 	-----------------------------------------------------------------------------
 	InventoryMakerClient (IMC)
 	-----------------------------------------------------------------------------
-    v1.3.0 Update Log (7/30/25)
+    v1.3.0 Update Log (8/1/25)
         - [New Feature]: Static Containers; used to render and interact with static inventories. I made
             this primarily to easily create merchant NPCs that you can sell to and buy from.
             New Methods:
@@ -26,6 +26,7 @@
                     - StaticContainer:DefineClose()
                     - StaticContainer:Open()
                     - StaticContainer:Close()
+                    - StaticContainer:RerenderItem()
                 - IMC.BuildStaticContainer()
                 - IMC.DestroyStaticContainer()
         - [Changed]: OnToggledCallback accepts varargs, passed through IMC.ToggleInventory(), 
