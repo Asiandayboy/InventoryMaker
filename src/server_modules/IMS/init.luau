@@ -12,6 +12,7 @@
 	-----------------------------------------------------------------------------
     v1.3.0 Update Log (8/1/25)
         - [New Method]: Inventory:GetItem()
+        - [New Method]: Inventory:AddItemAtIndex()
 
     v1.2.1 Update Log (6/8/25)
         - No updates for IMS
@@ -124,15 +125,14 @@ local function isBitFlagEnabled(flags: number, bitFlag: number): boolean
 end
 
 local function deepCopyTable(t: Table)
-	local copy = {}
+	local copy = table.clone(t)
 
-	for k,v in pairs(t) do
+	for k,v in t do
 		if type(v) == "table" then
 			copy[k] = deepCopyTable(v::Table)
-		else
-			copy[k] = v
-		end
+        end
 	end
+
 	return copy
 end
 
@@ -280,6 +280,20 @@ export type Inventory = {
         stackOnAdd set to false.
 	]]
     AddItem: (self: Inventory, newItem: ITEM_TYPE, stackOnAdd: boolean?) -> boolean,
+
+    --[[
+        Adds a new item at the specified slotIndex. Only containers in the itemspace
+        are considered.
+
+        If the inventory is at full capacity, this method will return false.
+		If the container does not allow the item, this method will return false.
+		
+		stackOnAdd defaults to false if it's not provided. If stackOnAdd is true and
+        there is already an item in the slot, this function will check if the new item
+        can be stacked onto the existing item based on the ValidateStackFunc. If it 
+        does not pass the validation, the operation will fail and false will be returned.
+    ]]
+    AddItemAtIndex: (self: Inventory, slotIndex: number, newItem: ITEM_TYPE, stackOnAdd: boolean?) -> boolean,
 
     --[[ 
 		Increases the capacity of the container by the amount, pushing all items after it to make
@@ -520,6 +534,7 @@ export type RemoteCallbacks = {
 	OnAdd: (player: Player, newItem: ITEM_TYPE, stackOnAdd: boolean) -> (),
 	OnIncreaseCap: CapacityChangedCallback?,
 	OnDecreaseCap: CapacityChangedCallback?,
+    OnAddAtIndex: ((player: Player, slotIndex: number, newItem: ITEM_TYPE, stackOnAdd: boolean) -> ())?
 }
 
 
@@ -690,6 +705,107 @@ function Inventory.new(capacity: number, inventoryData: _DATA): Inventory
 		return false
 	end
 	
+    function props.AddItemAtIndex(self: _Inventory, slotIndex: number, newItem: ITEM_TYPE, stackOnAdd: boolean?): boolean
+		if self._currSize >= self._capacity then debugWarn("Failed to add new item; inventory at full capacity.") return false end
+
+        local targetContainer = getContainerFromSlotIndex(self._containers, slotIndex)
+        local containerName = targetContainer._name
+        if targetContainer._currSize >= targetContainer._capacity then 
+            debugWarn(string.format("Cannot add item at slotIndex %d; container %s at full capacity.", slotIndex, containerName))
+            return false
+        end
+
+        if not targetContainer._CALLBACKS._ALLOWED_ITEMS_FUNC(newItem) then 
+            debugWarn(string.format("Cannot add item at slotIndex %d; item not allowed in container %s.", slotIndex, containerName))
+            return false
+        end
+
+        if targetContainer._inItemspace == false then
+            debugWarn(string.format("Cannot add item at slotIndex %d; container %s not in itemspace.", slotIndex, containerName))
+            return false 
+        end
+
+        local player = self._player::Player
+        local stackingConfigs = self._STACKING_CONFIGS
+        stackOnAdd = if stackOnAdd == nil then false else stackOnAdd
+
+        local itemAtSlot = self._data[slotIndex]
+        if not itemAtSlot then
+            self._data[slotIndex] = newItem
+            self._currSize += 1
+            targetContainer._currSize += 1
+            if self._REMOTE_CALLBACKS then 
+                local onAddAtIndex = self._REMOTE_CALLBACKS.OnAddAtIndex
+                if onAddAtIndex then
+                    onAddAtIndex(player, slotIndex, deepCopyTable(newItem::Table)::ITEM_TYPE, stackOnAdd) 
+                end
+            end
+
+            debugPrint(string.format("New item added at slotIndex %d; current size: %d", slotIndex, self._currSize))
+        else
+            if not stackOnAdd then
+                debugWarn(string.format("Cannot add item at slotIndex %d; item already exists at that slot.", slotIndex))
+                return false
+            end
+            if not stackingConfigs then
+                debugWarn(string.format("Cannot add item at slotIndex %d with stackOnAdd; Stacking configs not defined.", slotIndex))
+                return false
+            end
+
+            local canStack, leftover = stackingConfigs.ValidateStackFunc(player, itemAtSlot, newItem)
+            if not canStack then
+                debugWarn(string.format("Cannot add item at slotIndex %d; failed to pass stack validation.", slotIndex))
+                return false
+            end
+            if isBitFlagEnabled(targetContainer._flags, IMS.NO_STACKING) then
+                debugWarn(string.format("Cannot add item at slotIndex %d; container %s has stacking disabled.", slotIndex, containerName))
+                return false
+            end
+
+            local newItemClone = deepCopyTable(newItem::Table)::ITEM_TYPE
+
+            if leftover > 0 then
+                --[[
+                    We make a clone of itemAtSlot, and use that to update a clone of newItem.
+                    We will pass the updated newItemClone into :AddItem, which is us checking
+                    if adding the leftover item is successful. If it is, then we update the real
+                    "itemAtSlot" with the actual newItem. And then send a clone of newItem, before
+                    the update.
+
+                    If we updated the real itemtSlot with the actual newItem, we wouldn't be able to
+                    reverse the changes if :AddItem() failed (unless we changed the API to have
+                    UpdateStackFunc return a cleanup function...which is a possibility)
+                ]]
+                local itemAtSlotClone = deepCopyTable(itemAtSlot::Table)::ITEM_TYPE
+                stackingConfigs.UpdateStackFunc(self._player, leftover, itemAtSlotClone, newItemClone)
+
+                local success = self:AddItem(newItemClone, false)
+                if success then
+                    local newItemClone2 = deepCopyTable(newItem::Table)::ITEM_TYPE
+                    stackingConfigs.UpdateStackFunc(self._player, leftover, itemAtSlot, newItem)
+
+                    if self._REMOTE_CALLBACKS then 
+                        local onAddAtIndex = self._REMOTE_CALLBACKS.OnAddAtIndex
+                        if onAddAtIndex then
+                            onAddAtIndex(player, slotIndex, newItemClone2, stackOnAdd) 
+                        end
+                    end
+                end
+            else
+                stackingConfigs.UpdateStackFunc(self._player, 0, itemAtSlot, newItem)
+                if self._REMOTE_CALLBACKS then 
+                    local onAddAtIndex = self._REMOTE_CALLBACKS.OnAddAtIndex
+                    if onAddAtIndex then
+                        onAddAtIndex(player, slotIndex, newItemClone, stackOnAdd) 
+                    end
+                end
+                debugPrint(string.format("New item added at slotIndex %d with stackOnAdd; current size: %d", slotIndex, self._currSize))
+            end
+        end
+
+        return true
+    end
+
 	function props.IncreaseCapacity(self: _Inventory, builtContainerIndex: number, amount: number)
 		if not builtContainerIndex or typeof(builtContainerIndex) ~= "number" or builtContainerIndex > #self._containers or builtContainerIndex <= 0 then 
 			debugWarn("Cannot increase capacity; builtContainerIndex must be an index into the inventory's built containers.") 

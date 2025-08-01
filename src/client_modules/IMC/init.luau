@@ -32,6 +32,7 @@
         - [Changed]: OnToggledCallback accepts varargs, passed through IMC.ToggleInventory(), 
             IMC.ToggleOn(), and IMC.ToggleOff()
         - [Changed]: IMC.GetItem() now also returns the slotGui and filledGui
+        - [New Method]: IMC.AddItemAtIndex()
 
     v1.2.1 Update Log (6/8/25)
         - [Bug Fix]: Old gui objects was used when equipping a new item after switching across containers, resulting in a nil error
@@ -366,7 +367,7 @@ type _InventoryMakerProps = {
 	_boundingBoxes: { { _BoundingBox } }, -- stores all active bounding boxes; each is an array of 4 numbers: {topLeftX, topLeftY, botRightX, botRightY}; only 4 points to make a 2d rectangle
 	_onFirstHoveredMenu: () -> () -> (),
 	
-	_STACKING_CONFIGS: StackingConfigs,
+	_STACKING_CONFIGS: StackingConfigs?,
 	_CUSTOM_FILTERS: { [string]: IMFilter.CustomFilterFunc },
 	_SWITCH_VALIDATE_FUNC: SwitchValidateFunc,
 	
@@ -667,7 +668,10 @@ local function stackOnDrag(props: _InventoryMakerProps,
 	if not props._data then error("[InventoryMaker]: No data was detected when trying to stack on drag") end
 	if targetItem == oldItem then error("[InventoryMaker]: Items are the same ref when stacking.") end
 	
-	local targetFilledGui = targetSlot:FindFirstChild(IMConstants.FILLED_GUI_NAME)::GuiObject
+	local configs = props._STACKING_CONFIGS
+    if not configs then return end
+    
+    local targetFilledGui = targetSlot:FindFirstChild(IMConstants.FILLED_GUI_NAME)::GuiObject
 	local targetSlotIndex = getSlotIndexFromSlot(targetSlot)::number
 	local currSlotIndex = getSlotIndexFromSlot(oldFilledGui.Parent::GuiObject)::number
 	
@@ -677,7 +681,7 @@ local function stackOnDrag(props: _InventoryMakerProps,
 		IMContainer.DestroyFilledGui(originContainer, currSlotIndex)
 		props._data[currSlotIndex] = false
 		props._currSize -= 1
-		props._STACKING_CONFIGS._STACK_UPDATE(leftover, targetItem, oldItem, targetFilledGui, nil)
+		configs._STACK_UPDATE(leftover, targetItem, oldItem, targetFilledGui, nil)
 		
 		if IMS._CALLBACKS then
 			IMS._CALLBACKS.OnStack(targetSlotIndex, currSlotIndex)
@@ -703,7 +707,7 @@ local function stackOnDrag(props: _InventoryMakerProps,
 		
 		debugPrint(string.format("New inventory size after stacking: %d\n\tleftover=%d", props._currSize, 0))	
 	else
-		props._STACKING_CONFIGS._STACK_UPDATE(leftover, targetItem, oldItem, targetFilledGui, oldFilledGui)
+		configs._STACK_UPDATE(leftover, targetItem, oldItem, targetFilledGui, oldFilledGui)
 		
 		if IMS._CALLBACKS then
 			IMS._CALLBACKS.OnStack(targetSlotIndex, currSlotIndex)
@@ -1516,7 +1520,7 @@ local function connectFilledGuiEvents(props: _InventoryMakerProps,
 	local isHotbarContainer = container._name == IMConstants.CONTAINER_HOTBAR_NAME
 	local touchedEnabled = IMInput.GetInputType() == IMInput.INPUT_TOUCH
 	local mouseEnabled = IMInput.GetInputType() == IMInput.INPUT_MOUSE
-	local containerCb = container._CALLBACKS
+	local containerCallbacks = container._CALLBACKS
 	
 	if touchedEnabled then
 		filledGui.Active = true
@@ -1554,8 +1558,8 @@ local function connectFilledGuiEvents(props: _InventoryMakerProps,
                 local item = getItemFromFilledGui(filledGui)
 				equipItemToggle(item)
 				
-				if containerCb._ACTIVATED_FUNC then
-					containerCb._ACTIVATED_FUNC(item, filledGui, getSlotIndexFromSlot(filledGui.Parent::GuiObject)::number)
+				if containerCallbacks._ACTIVATED_FUNC then
+					containerCallbacks._ACTIVATED_FUNC(item, filledGui, getSlotIndexFromSlot(filledGui.Parent::GuiObject)::number)
 				end
 			end
 			lastTap = os.clock()
@@ -1571,8 +1575,8 @@ local function connectFilledGuiEvents(props: _InventoryMakerProps,
                 local item = getItemFromFilledGui(filledGui)
 				equipItemToggle(item)
 				
-				if containerCb._ACTIVATED_FUNC then
-					containerCb._ACTIVATED_FUNC(item, filledGui, getSlotIndexFromSlot(filledGui.Parent::GuiObject)::number)
+				if containerCallbacks._ACTIVATED_FUNC then
+					containerCallbacks._ACTIVATED_FUNC(item, filledGui, getSlotIndexFromSlot(filledGui.Parent::GuiObject)::number)
 				end
 			end
 		end)
@@ -1592,8 +1596,8 @@ local function connectFilledGuiEvents(props: _InventoryMakerProps,
 			setEquippedItem(props, item, filledGui, container, false, false)
 			
 			-- disable left click callback on mobile since mobile does not have a left click mouse button
-			if containerCb._ACTIVATED_FUNC and mouseEnabled then 
-				containerCb._ACTIVATED_FUNC(item, filledGui, getSlotIndexFromSlot(filledGui.Parent::GuiObject)::number) 
+			if containerCallbacks._ACTIVATED_FUNC and mouseEnabled then 
+				containerCallbacks._ACTIVATED_FUNC(item, filledGui, getSlotIndexFromSlot(filledGui.Parent::GuiObject)::number) 
 			end
 			return false
 		end
@@ -1621,8 +1625,8 @@ local function connectFilledGuiEvents(props: _InventoryMakerProps,
 			-- disable left click callback and tapping to equip on mobile for all non-hotbar slots
 			if touchedEnabled and not isHotbarContainer then return end
 			equipItemToggle(item)
-			if containerCb._ACTIVATED_FUNC then 
-				containerCb._ACTIVATED_FUNC(item, filledGui, getSlotIndexFromSlot(filledGui.Parent::GuiObject)::number) 
+			if containerCallbacks._ACTIVATED_FUNC then 
+				containerCallbacks._ACTIVATED_FUNC(item, filledGui, getSlotIndexFromSlot(filledGui.Parent::GuiObject)::number) 
 			end
 			return
 		end
@@ -1647,7 +1651,7 @@ local function connectFilledGuiEvents(props: _InventoryMakerProps,
 				local targetItem = (props._data::_DATA)[targetSlotIndex]::ITEM_TYPE
 				
 				if targetItem then
-					local canStack, leftover = stackingConfigs._STACK_VALIDATE(targetItem, oldItem)
+					local canStack, leftover = (stackingConfigs::StackingConfigs)._STACK_VALIDATE(targetItem, oldItem)
 					if canStack then
 						if container ~= targetContainer and targetContainer._closedContainer then 
 							debugPrint("Stacking operation canceled; cannot stack from an open container to a closed one")
@@ -1726,6 +1730,8 @@ local function split(props: _InventoryMakerProps, splitSlotIndex: number, currFi
 	if props._currSize >= props._capacity then debugWarn("Not enough space in inventory to split.") return end
 
 	local configs = props._STACKING_CONFIGS
+    if not configs then return end
+
 	local currItem = props._data[splitSlotIndex]::ITEM_TYPE
 	local newItemContainer = props._containers[getContainerNameFromFilledGui(currFilledGui)]
 	
@@ -1846,6 +1852,8 @@ local function stackOnAddItem(
 	local targetFilledGui = IMContainer.GetFilledGuiFromIndex(container, targetSlotIndex)
 	if not targetFilledGui then debugWarn("Could not find filled gui for stacking.") return false end
 
+    local stackingConfigs = props._STACKING_CONFIGS
+    if not stackingConfigs then return false end
 	
 	if leftover <= 0 then
 		updateFunc(leftover, targetItem, newItem, targetFilledGui)
@@ -1854,7 +1862,7 @@ local function stackOnAddItem(
 		local canAutoEquip = not IMContainer.IsBitFlagEnabled(container._flags, InventoryMaker.NO_AUTO_EQUIP)
 		
 		if equippedItem then
-			local canStack = props._STACKING_CONFIGS._STACK_VALIDATE(targetItem, equippedItem._item)
+			local canStack = stackingConfigs._STACK_VALIDATE(targetItem, equippedItem._item)
 			if not canStack and canAutoEquip then
 				setEquippedItem(props, targetItem, targetFilledGui, container, true, false)
 			end
@@ -1884,9 +1892,9 @@ local function stackOnAddItem(
 		if v then continue end
 
 		-- find the next available container with empty slots
-		local cIndex = props._containersIndex
-		for c = 1, #cIndex do
-			local container = props._containers[cIndex[c]]
+		local indexedContainers = props._containersIndex
+		for c = 1, #indexedContainers do
+			local container = props._containers[indexedContainers[c]]
 			if container._currSize >= container._capacity then continue end
 			leftoverContainer = container
 			leftoverIndex = i
@@ -1894,7 +1902,7 @@ local function stackOnAddItem(
 		end
 
 		IMContainer.AddItemAtIndex(leftoverContainer, leftoverIndex, newItem, 
-			function(newFilledGui: GuiObject, newSlot: GuiObject, itemRef: ITEM_TYPE, cRef: IMContainer._Container, slotIndex: number, cIndex: number)
+			function(newFilledGui: GuiObject, newSlot: GuiObject, itemRef: ITEM_TYPE, cRef: IMContainer._Container, slotIndex: number, containerIndex: number)
 				connectFilledGuiEvents(props, newFilledGui, cRef)
 				updateFunc(leftover, targetItem, itemRef, targetFilledGui, newFilledGui)
 				props._data[leftoverIndex] = itemRef
@@ -1906,7 +1914,7 @@ local function stackOnAddItem(
 
 				if cRef._name == IMConstants.CONTAINER_HOTBAR_NAME then
 					unbindHotbarKey(cRef, slotIndex)
-					bindHotbarKey(cRef, props._data, slotIndex, cIndex)
+					bindHotbarKey(cRef, props._data, slotIndex, containerIndex)
 				end
 			end
 		)
@@ -2541,6 +2549,103 @@ function InventoryMaker.AddItem(newItem: ITEM_TYPE, stackOnAdd: boolean?): boole
 	
 	debugWarn("(Internal): Failed to add new item; max iterations.")
 	return false
+end
+
+--[[
+    Inserts a new item at the specified slotIndex and increments the current inventory size.
+    A boolean will be returned indicating the success of the operation.
+
+    stackOnAdd defaults to false if not provided.
+]]
+function InventoryMaker.AddItemAtIndex(slotIndex: number, newItem: ITEM_TYPE, stackOnAdd: boolean?): boolean
+    if not newItem then error("[InventoryMaker]: newItem is nil.", 2) end
+	if _inventoryMakerProps._data == nil then error("[InventoryMaker]: No inventory data to add to.") end
+	if _inventoryMakerProps._currSize == _inventoryMakerProps._capacity then 
+		debugWarn("Inventory at full capacity.") 
+		return false
+	end
+
+    if slotIndex <= 0 or slotIndex > _inventoryMakerProps._capacity then
+        error("[InventoryMaker]: slotIndex out of bounds")
+    end
+
+    local targetContainer = getContainerFromSlotIndex(slotIndex, _inventoryMakerProps)::IMContainer._Container
+    local containerName = targetContainer._name
+    if targetContainer._currSize >= targetContainer._capacity then 
+        debugWarn(string.format("Cannot add item at slotIndex %d; container %s at full capacity.", slotIndex, containerName))
+        return false
+    end
+
+    if not targetContainer:_isItemAllowed(newItem) then 
+        debugWarn(string.format("Cannot add item at slotIndex %d; item not allowed in container %s.", slotIndex, containerName))
+        return false
+    end
+
+    if targetContainer._inItemspace == false then
+        debugWarn(string.format("Cannot add item at slotIndex %d; container %s not in itemspace.", slotIndex, containerName))
+        return false 
+    end
+
+    local stackingConfigs = _inventoryMakerProps._STACKING_CONFIGS
+	stackOnAdd = if stackOnAdd == nil then false else stackOnAdd
+
+    local function callback(filledGui: GuiObject, slot: GuiObject, item: ITEM_TYPE, c: IMContainer._Container, slotIndex: number, cIndex: number)
+		connectFilledGuiEvents(_inventoryMakerProps, filledGui, c)
+		
+		if not IMContainer.IsBitFlagEnabled(c._flags, InventoryMaker.NO_AUTO_EQUIP) then
+			setEquippedItem(_inventoryMakerProps, item, filledGui, c, false, false)
+		end
+		
+		if c._name == IMConstants.CONTAINER_HOTBAR_NAME then
+			bindHotbarKey(c, _inventoryMakerProps._data::_DATA, slotIndex, cIndex)
+		end
+	end
+
+    local itemAtSlot = _inventoryMakerProps._data[slotIndex]
+    if not itemAtSlot then
+        _inventoryMakerProps._data[slotIndex] = newItem
+        _inventoryMakerProps._currSize += 1
+        IMContainer.AddItemAtIndex(targetContainer, slotIndex, newItem, callback)
+        if _inventoryMakerProps._CALLBACKS and _inventoryMakerProps._CALLBACKS._ON_SIZE_CHANGED then
+            _inventoryMakerProps._CALLBACKS._ON_SIZE_CHANGED(_inventoryMakerProps._currSize, _inventoryMakerProps._capacity)
+        end
+        debugPrint(string.format("New item at slotIndex %d; current size: %d", slotIndex, _inventoryMakerProps._currSize))
+    else
+        if not stackOnAdd then
+            debugWarn(string.format("Cannot add item at slotIndex %d; item already exists at that slot.", slotIndex))
+            return false
+        end
+        if not stackingConfigs then
+            debugWarn(string.format("Cannot add item at slotIndex %d with stackOnAdd; Stacking configs not defined.", slotIndex))
+            return false
+        end
+
+        local canStack, leftover = stackingConfigs._STACK_VALIDATE(itemAtSlot, newItem)
+        if not canStack then
+            debugWarn(string.format("Cannot add item at slotIndex %d; failed to pass stack validation.", slotIndex))
+            return false
+        end
+        if targetContainer._stackingEnabled == false then
+            debugWarn(string.format("Cannot add item at slotIndex %d; container %s has stacking disabled.", slotIndex, containerName))
+            return false
+        end
+
+        local res = stackOnAddItem(
+            _inventoryMakerProps,
+            stackingConfigs._STACK_UPDATE, 
+            targetContainer, 
+            newItem, 
+            itemAtSlot, 
+            slotIndex, 
+            leftover
+        )
+        if not res then
+            debugWarn(string.format("Failed to add item at slotIndex %d; inventory at full capacity", slotIndex))
+            return false
+        end
+    end
+
+    return true
 end
 
 --[[
