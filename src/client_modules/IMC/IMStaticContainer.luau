@@ -78,7 +78,8 @@ export type StaticContainer = {
                 RenderFunc: (
                     item: ITEM_TYPE, 
                     filledGui: GuiObject, 
-                    containerIndex: number
+                    containerIndex: number,
+                    ...any
                 ) -> ()
             }
     ]]
