@@ -127,6 +127,12 @@ export type StaticContainer = {
         Closes the static inventory's inventory; unrenders from the screen.
     ]]
     Close: (self: StaticContainer, ...any) -> (),
+
+    --[[
+        Calls the filled slot's render function defined in DefineFilledSlot(). 
+        This function does nothing if it's an empty slot.
+    ]]
+    RerenderItem: (self: StaticContainer, containerIndex: number, ...any) -> (),
 }
 
 type StaticContainerEmptyConfigs = {
@@ -136,7 +142,7 @@ type StaticContainerEmptyConfigs = {
 
 type StaticContainerFilledConfigs = {
     GuiTemplate: GuiObject, 
-    RenderFunc: (item: ITEM_TYPE, filledGui: GuiObject, containerIndex: number) -> ()
+    RenderFunc: (item: ITEM_TYPE, filledGui: GuiObject, containerIndex: number, ...any) -> ()
 }
 
 export type _StaticContainer = {
@@ -151,7 +157,7 @@ export type _StaticContainer = {
     _EMPTY_TEMPLATE: GuiObject,
     _FILLED_TEMPLATE: GuiObject,
     _RENDER_EMPTY_FUNC: ((emptyGui: GuiObject, containerIndex: number) -> ())?,
-    _RENDER_FILLED_FUNC: (item: ITEM_TYPE, filledGui: GuiObject, containerIndex: number) -> (),
+    _RENDER_FILLED_FUNC: (item: ITEM_TYPE, filledGui: GuiObject, containerIndex: number, ...any) -> (),
 
     _HOVER_INFO: _HoverPromptInfo,
 
@@ -251,6 +257,15 @@ function StaticContainer.NewStaticContainer(name: string, capacity: number): Sta
             if not self._opened then return end
             self._opened = false
             self._CALLBACKS._ON_CLOSED_FUNC(self._PARENT_CONTAINER, ...)
+        end,
+
+        RerenderItem = function(self: _StaticContainer, containerIndex: number, ...: any)
+            local item = self._data[containerIndex]
+            if not item then return end
+
+            local slotGui = self._slotGuiObjs[containerIndex]::{ [string]: GuiObject } & GuiObject
+            local filledGui = slotGui[Constants.FILLED_GUI_NAME]
+            self._RENDER_FILLED_FUNC(item, filledGui, containerIndex, ...)
         end,
     }
 
