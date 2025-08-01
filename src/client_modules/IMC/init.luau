@@ -169,6 +169,7 @@ local IMUserType = require(script.IMUserType)
 local IMHotbar = require(script.IMHotbar)
 local IMDraggableUI = require(script.IMDraggableUI)
 local IMUtility = require(script.IMUtility)
+local IMStaticContainer = require(script.IMStaticContainer)
 
 local SWITCH_NONE = 0
 local SWITCH_ITEM = 1
@@ -275,11 +276,11 @@ local InventoryMaker = {
 
 IMHotbar.DEBUG_PRINT = InventoryMaker.DEBUG_PRINT_KEYBIND_MESSAGES
 
-export type StaticContainer = IMContainer.StaticContainer
+export type StaticContainer = IMStaticContainer.StaticContainer
 export type ItemPositionInfo = IMContainer.ItemPositionInfo
 export type ITEM_TYPE = IMUserType.USER_ITEM_TYPE
 
-type _StaticContainer = IMContainer._StaticContainer
+type _StaticContainer = IMStaticContainer._StaticContainer
 
 type _DATA = { ITEM_TYPE | false }
 
@@ -1349,7 +1350,7 @@ end
     This function assumes the items are fixed in position, never changing in order in the array
     during runtime, hence the "static"
 ]]
-local function connectActivatedEventForStaticContainer(staticContainer: IMContainer._StaticContainer, filledGui: GuiObject, containerIndex: number)
+local function connectActivatedEventForStaticContainer(staticContainer: IMStaticContainer._StaticContainer, filledGui: GuiObject, containerIndex: number)
     local activatedFunc = staticContainer._CALLBACKS._ACTIVATED_FUNC
     if not activatedFunc then return end
 
@@ -1375,7 +1376,7 @@ end
     during runtime, hence the "static"
 ]]
 local function connectFilledSlotHoverEventsForStaticContainer(props: _InventoryMakerProps,
-    staticContainer: IMContainer._StaticContainer,
+    staticContainer: IMStaticContainer._StaticContainer,
     filledGui: GuiObject,
     containerIndex: number
 )
@@ -2153,8 +2154,8 @@ end
     The first arg, **name**, should be a unique name for the contianer
     The second arg, **capacity**, is the max size of the inventory.
 ]]
-function InventoryMaker.StaticContainer(name: string, capacity: number): IMContainer.StaticContainer
-    return IMContainer.NewStaticContainer(name, capacity)
+function InventoryMaker.StaticContainer(name: string, capacity: number): IMStaticContainer.StaticContainer
+    return IMStaticContainer.NewStaticContainer(name, capacity)
 end
 
 --[[
@@ -2369,8 +2370,8 @@ end
     Builds the static container after it has been configured, and takes in an 
     inventory data to render.
 ]]
-function InventoryMaker.BuildStaticContainer(staticContainer: IMContainer._StaticContainer, staticContainerData: { ITEM_TYPE })
-    IMContainer.InitStaticContainer(staticContainer, staticContainerData, function(filledGui: GuiObject, containerIndex: number)  
+function InventoryMaker.BuildStaticContainer(staticContainer: IMStaticContainer._StaticContainer, staticContainerData: { ITEM_TYPE })
+    IMStaticContainer.InitStaticContainer(staticContainer, staticContainerData, function(filledGui: GuiObject, containerIndex: number)  
         if IMInput.GetInputType() == IMInput.INPUT_TOUCH then
             filledGui.Active = true
         end
@@ -2383,9 +2384,9 @@ end
     Calls the :Close() method on the static container and then destroys the 
     container entirely, removing it from memory.
 ]]
-function InventoryMaker.DestroyStaticContainer(staticContainer: IMContainer._StaticContainer)
+function InventoryMaker.DestroyStaticContainer(staticContainer: IMStaticContainer._StaticContainer)
     staticContainer:Close()
-    IMContainer.DestroyStaticContainer(staticContainer)
+    IMStaticContainer.DestroyStaticContainer(staticContainer)
 end
 
 --[[
