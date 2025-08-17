@@ -2730,7 +2730,7 @@ end
 --[[
 	Define the same hover prompt configs for all provided containers
 ]]
-function InventoryMaker.DefineHoverPrompts(containers: { IMContainer._Container }, configs: IMContainer.HoverPromptConfigs)
+function InventoryMaker.DefineHoverPrompts(containers: { IMContainer.Container }, configs: IMContainer.HoverPromptConfigs)
 	for i = 1, #containers do
 		containers[i]:DefineHoverPrompt(configs)
 	end
@@ -2739,7 +2739,7 @@ end
 --[[
 	Define the same empty slot configs for all provided containers
 ]]
-function InventoryMaker.DefineEmptySlots(containers: { IMContainer._Container }, configs: IMContainer.EmptyConfigs)
+function InventoryMaker.DefineEmptySlots(containers: { IMContainer.Container }, configs: IMContainer.EmptyConfigs)
 	for i = 1, #containers do
 		containers[i]:DefineEmptySlot(configs)
 	end
@@ -2748,7 +2748,7 @@ end
 --[[
 	Define the same filled slot configs for all provided containers
 ]]
-function InventoryMaker.DefineFilledSlots(containers: { IMContainer._Container }, configs: IMContainer.FilledConfigs)
+function InventoryMaker.DefineFilledSlots(containers: { IMContainer.Container }, configs: IMContainer.FilledConfigs)
 	for i = 1, #containers do
 		containers[i]:DefineFilledSlot(configs)
 	end
@@ -2757,7 +2757,7 @@ end
 --[[
 	Define the same activated callback for all provided containers 
 ]]
-function InventoryMaker.DefineActivatedCallbacks(containers: { IMContainer._Container }, callback: IMContainer.ActivatedCallback)
+function InventoryMaker.DefineActivatedCallbacks(containers: { IMContainer.Container }, callback: IMContainer.ActivatedCallback)
 	for i = 1, #containers do
 		containers[i]:DefineActivatedCallback(callback)
 	end
@@ -2766,7 +2766,7 @@ end
 --[[
 	Define the same OnItemAdded callback for all provided containers
 ]]
-function InventoryMaker.DefineOnItemAddedCallbacks(containers: { IMContainer._Container }, callback: IMContainer.OnItemAddedCallback)
+function InventoryMaker.DefineOnItemAddedCallbacks(containers: { IMContainer.Container }, callback: IMContainer.OnItemAddedCallback)
 	for i = 1, #containers do
 		containers[i]:DefineOnItemAddedCallback(callback)
 	end
@@ -2775,7 +2775,7 @@ end
 --[[
 	Define the same AllowedItems callback for all provided containers
 ]]
-function InventoryMaker.DefineAllowedItems(containers: { IMContainer._Container }, callback: IMContainer.AllowedItemsCallback)
+function InventoryMaker.DefineAllowedItems(containers: { IMContainer.Container }, callback: IMContainer.AllowedItemsCallback)
 	for i = 1, #containers do
 		containers[i]:DefineAllowedItems(callback)
 	end
