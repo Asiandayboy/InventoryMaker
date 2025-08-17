@@ -7,14 +7,14 @@
 	
 	Created by: robloxdestroyer1035
 	Version: v1.3.0
-	Last Updated: 8/1/25
+	Last Updated: 8/16/25
 	
 	-----------------------------------------------------------------------------
 	InventoryMakerClient (IMC)
 	-----------------------------------------------------------------------------
-    v1.3.0 Update Log (8/1/25)
+    v1.3.0 Update Log (8/16/25)
         - [New Feature]: Static Containers; used to render and interact with static inventories. I made
-            this primarily to easily create merchant NPCs that you can sell to and buy from.
+            this primarily to easily render merchant NPCs' inventories that you can sell to and buy from.
             New Methods:
                 - IMC.StaticContainer()
                     - StaticContainer:DefineLayout()
@@ -29,10 +29,13 @@
                     - StaticContainer:RerenderItem()
                 - IMC.BuildStaticContainer()
                 - IMC.DestroyStaticContainer()
+        - [New Method]: IMC.AddItemAtIndex()
         - [Changed]: OnToggledCallback accepts varargs, passed through IMC.ToggleInventory(), 
             IMC.ToggleOn(), and IMC.ToggleOff()
         - [Changed]: IMC.GetItem() now also returns the slotGui and filledGui
-        - [New Method]: IMC.AddItemAtIndex()
+        - [Changed]: Made IMS remote callbacks optional
+        - [Changed]: Exported Container type; not really sure why I didn't do this already...
+        - [Changed]: Exported DATA type, which represents the type of the underlying inventory data array
 
     v1.2.1 Update Log (6/8/25)
         - [Bug Fix]: Old gui objects was used when equipping a new item after switching across containers, resulting in a nil error
@@ -278,13 +281,14 @@ local InventoryMaker = {
 
 IMHotbar.DEBUG_PRINT = InventoryMaker.DEBUG_PRINT_KEYBIND_MESSAGES
 
+export type Container = IMContainer.Container
 export type StaticContainer = IMStaticContainer.StaticContainer
 export type ItemPositionInfo = IMContainer.ItemPositionInfo
 export type ITEM_TYPE = IMUserType.USER_ITEM_TYPE
+export type DATA = { ITEM_TYPE | false }
 
 type _StaticContainer = IMStaticContainer._StaticContainer
 
-type _DATA = { ITEM_TYPE | false }
 
 type _ActiveSlot = {
 	_item: ITEM_TYPE,
@@ -329,7 +333,7 @@ export type StackingUpdateFunc = (leftover: number, targetItem: ITEM_TYPE, currI
 export type SplittingValidateFunc = (currItem: ITEM_TYPE) -> boolean
 export type SplittingUpdateFunc = (currItem: ITEM_TYPE, newItem: ITEM_TYPE, currFilledGui: GuiObject) -> (ITEM_TYPE, () -> ())
 
-export type StackingConfigs = {
+type _StackingConfigs = {
 	_STACK_VALIDATE: StackingValidateFunc,
 	_STACK_UPDATE: StackingUpdateFunc,
 	
@@ -345,7 +349,7 @@ export type Sorter = (itemA: ITEM_TYPE, itemB: ITEM_TYPE, ...any) -> boolean
 type _InventoryMakerProps = {
 	_containers: { [string]: IMContainer._Container },	-- dict for containers
 	_containersIndex: { string },						-- stores the order in which each container was built 
-	_data: _DATA?,
+	_data: DATA?,
 	_capacity: number,
 	_currSize: number,
 	_toggled: boolean,
@@ -367,7 +371,7 @@ type _InventoryMakerProps = {
 	_boundingBoxes: { { _BoundingBox } }, -- stores all active bounding boxes; each is an array of 4 numbers: {topLeftX, topLeftY, botRightX, botRightY}; only 4 points to make a 2d rectangle
 	_onFirstHoveredMenu: () -> () -> (),
 	
-	_STACKING_CONFIGS: StackingConfigs?,
+	_STACKING_CONFIGS: _StackingConfigs?,
 	_CUSTOM_FILTERS: { [string]: IMFilter.CustomFilterFunc },
 	_SWITCH_VALIDATE_FUNC: SwitchValidateFunc,
 	
@@ -381,11 +385,11 @@ type _InventoryMakerProps = {
 }
 
 export type RemoteCallbacks = {
-	OnSwitch: (slotIndex1: number, slotIndex2: number) -> (),
-	OnStack: (targetSlotIndex: number, currSlotIndex: number) -> (),
-	OnSplit: (newSlotIndex: number, splitSlotIndex: number) -> (),
-	OnEquip: (slotIndex: number?) -> (),
-    OnSort: (sorterName: string, ...any) -> (),
+	OnSwitch: ((slotIndex1: number, slotIndex2: number) -> ())?,
+	OnStack: ((targetSlotIndex: number, currSlotIndex: number) -> ())?,
+	OnSplit: ((newSlotIndex: number, splitSlotIndex: number) -> ())?,
+	OnEquip: ((slotIndex: number?) -> ())?,
+    OnSort: ((sorterName: string, ...any) -> ())?,
 }
 
 
@@ -447,7 +451,7 @@ end
 local function getItemFromFilledGui(filledGui: GuiObject): ITEM_TYPE
     local slot = filledGui.Parent::GuiObject
     local si = getSlotIndexFromSlot(slot)::number
-    return (_inventoryMakerProps._data::_DATA)[si]::ITEM_TYPE
+    return (_inventoryMakerProps._data::DATA)[si]::ITEM_TYPE
 end
 
 local function getContainerFromSlotIndex(slotIndex: number, props: _InventoryMakerProps): IMContainer._Container?
@@ -532,14 +536,20 @@ local function setEquippedItem(props: _InventoryMakerProps,
             _cleanupOldGuiFn = cleanupOldGuiFn
 		}
 		
-		if IMS._CALLBACKS then IMS._CALLBACKS.OnEquip(slotIndex) end
+		if IMS._CALLBACKS then 
+            local onEquip = IMS._CALLBACKS.OnEquip
+            if onEquip then onEquip(slotIndex) end
+        end
 
         if not scrollingInput then
             IMHotbar.RefreshScrollIndex(container, slotIndex)
         end
 	else
 		props._equippedItem = nil -- unequipping the same equipped item
-		if IMS._CALLBACKS then IMS._CALLBACKS.OnEquip(nil) end
+		if IMS._CALLBACKS then 
+            local onEquip = IMS._CALLBACKS.OnEquip
+            if onEquip then onEquip(nil) end
+        end
 	end
 end
 
@@ -569,7 +579,10 @@ local function refreshEquippedItem(props: _InventoryMakerProps, item: ITEM_TYPE,
         }
 		equippedItem._cleanupFn(equippedItem._item, newFilledGui, slotGui, info)
 		props._equippedItem = nil
-		if IMS._CALLBACKS then IMS._CALLBACKS.OnEquip(nil) end
+		if IMS._CALLBACKS then 
+            local onEquip = IMS._CALLBACKS.OnEquip
+            if onEquip then onEquip(nil) end
+        end
 		debugWarn("Item unequipped; item was moved into a container with NO_EQUIPPED_STATE flag enabled.")
 		return	
 	end
@@ -579,7 +592,10 @@ local function refreshEquippedItem(props: _InventoryMakerProps, item: ITEM_TYPE,
 		local containerIndex = IMContainer.GetContainerIndexFromSlotIndex(container, slotIndex)
 		if forceSet then 
 			equippedItem._item = item 
-			if IMS._CALLBACKS then IMS._CALLBACKS.OnEquip(slotIndex) end
+			if IMS._CALLBACKS then 
+                local onEquip = IMS._CALLBACKS.OnEquip
+                if onEquip then onEquip(slotIndex) end
+            end
 		end
 		equippedItem._filledGui = newFilledGui
 		local info: ItemPositionInfo = {
@@ -616,7 +632,7 @@ local function areContextMenusOpened(menusOpened: { _OpenedContextMenu }): boole
 	return menusOpened[1]._opened
 end
 
-local function toggleHotbarCollapse(data: _DATA, container: IMContainer._Container, show: boolean)
+local function toggleHotbarCollapse(data: DATA, container: IMContainer._Container, show: boolean)
 	if container._name ~= IMConstants.CONTAINER_HOTBAR_NAME then return end
 	if not IMContainer.IsBitFlagEnabled(container._flags, InventoryMaker.HOTBAR_COLLAPSE) then return end
 	if container._currSize == container._capacity then return end
@@ -638,7 +654,7 @@ local function unbindHotbarKey(container: IMContainer._Container, slotIndex: num
 	end
 end
 
-local function bindHotbarKey(container: IMContainer._Container, data: _DATA, 
+local function bindHotbarKey(container: IMContainer._Container, data: DATA, 
     slotIndex: number, 
     containerIndex: number
 )
@@ -684,7 +700,8 @@ local function stackOnDrag(props: _InventoryMakerProps,
 		configs._STACK_UPDATE(leftover, targetItem, oldItem, targetFilledGui, nil)
 		
 		if IMS._CALLBACKS then
-			IMS._CALLBACKS.OnStack(targetSlotIndex, currSlotIndex)
+            local onStack = IMS._CALLBACKS.OnStack
+            if onStack then onStack(targetSlotIndex, currSlotIndex) end
 		end
 		
 		if props._equippedItem then
@@ -710,7 +727,8 @@ local function stackOnDrag(props: _InventoryMakerProps,
 		configs._STACK_UPDATE(leftover, targetItem, oldItem, targetFilledGui, oldFilledGui)
 		
 		if IMS._CALLBACKS then
-			IMS._CALLBACKS.OnStack(targetSlotIndex, currSlotIndex)
+            local onStack = IMS._CALLBACKS.OnStack
+            if onStack then onStack(targetSlotIndex, currSlotIndex) end
 		end
 		
 		refreshEquippedItem(props, targetItem, targetFilledGui, targetSlot)
@@ -816,7 +834,8 @@ local function switch(props: _InventoryMakerProps, filledGui1: GuiObject, slot2:
 		end
 		
 		if IMS._CALLBACKS then
-			IMS._CALLBACKS.OnSwitch(aIndex, bIndex)
+            local onSwitch = IMS._CALLBACKS.OnSwitch
+            if onSwitch then onSwitch(aIndex, bIndex) end
 		end
 		
 		return SWITCH_ITEM
@@ -849,7 +868,8 @@ local function switch(props: _InventoryMakerProps, filledGui1: GuiObject, slot2:
 	)
 	
 	if IMS._CALLBACKS then
-		IMS._CALLBACKS.OnSwitch(aIndex, bIndex)
+        local onSwitch = IMS._CALLBACKS.OnSwitch
+        if onSwitch then onSwitch(aIndex, bIndex) end
 	end
 	
 	return SWITCH_CONTAINER
@@ -1647,11 +1667,11 @@ local function connectFilledGuiEvents(props: _InventoryMakerProps,
 			
 			if stackingConfigs then
 				local targetContainer = props._containers[getContainerNameFromSlot(possibleSlot)]
-				local oldItem = (props._data::_DATA)[getSlotIndexFromSlot(filledGui.Parent::GuiObject)::number]::ITEM_TYPE
-				local targetItem = (props._data::_DATA)[targetSlotIndex]::ITEM_TYPE
+				local oldItem = (props._data::DATA)[getSlotIndexFromSlot(filledGui.Parent::GuiObject)::number]::ITEM_TYPE
+				local targetItem = (props._data::DATA)[targetSlotIndex]::ITEM_TYPE
 				
 				if targetItem then
-					local canStack, leftover = (stackingConfigs::StackingConfigs)._STACK_VALIDATE(targetItem, oldItem)
+					local canStack, leftover = (stackingConfigs::_StackingConfigs)._STACK_VALIDATE(targetItem, oldItem)
 					if canStack then
 						if container ~= targetContainer and targetContainer._closedContainer then 
 							debugPrint("Stacking operation canceled; cannot stack from an open container to a closed one")
@@ -1836,7 +1856,8 @@ local function split(props: _InventoryMakerProps, splitSlotIndex: number, currFi
 			splittingActive = false
 
 			if IMS._CALLBACKS then
-				IMS._CALLBACKS.OnSplit(emptySlotIndex, splitSlotIndex)
+                local onSplit = IMS._CALLBACKS.OnSplit
+                if onSplit then onSplit(emptySlotIndex, splitSlotIndex) end
 			end
 		end
 	end
@@ -2026,7 +2047,7 @@ local function inventoryOn(props: _InventoryMakerProps): (boolean, boolean)
     
     local hotbar = props._containers[IMConstants.CONTAINER_HOTBAR_NAME]
     if hotbar then
-        toggleHotbarCollapse(props._data::_DATA, hotbar, true)
+        toggleHotbarCollapse(props._data::DATA, hotbar, true)
     end
 
     return true, props._toggled
@@ -2062,7 +2083,7 @@ local function inventoryOff(props: _InventoryMakerProps): (boolean, boolean)
     
     local hotbar = props._containers[IMConstants.CONTAINER_HOTBAR_NAME]
     if hotbar then
-        toggleHotbarCollapse(props._data::_DATA, hotbar, false)
+        toggleHotbarCollapse(props._data::DATA, hotbar, false)
     end
 
     if props._activeSlot then
@@ -2152,8 +2173,8 @@ end
 	
 	<code>local c = InventoryMaker.Container("2", 25, InventoryMaker.CLOSED + InventoryMaker.NO_FILTERING)</code>
 ]]
-function InventoryMaker.Container(name: string, capacity: number, flags: number?): IMContainer.Container
-	return IMContainer.new(name, capacity, flags or 0)::IMContainer.Container
+function InventoryMaker.Container(name: string, capacity: number, flags: number?): Container
+	return IMContainer.new(name, capacity, flags or 0)::Container
 end
 
 --[[
@@ -2184,7 +2205,7 @@ end
 	If your array of items has gaps in it, those gaps will be marked with "false" to signify
 	empty slots.
 ]]
-function InventoryMaker.Populate(populatorFunc: () -> (_DATA, number))
+function InventoryMaker.Populate(populatorFunc: () -> (DATA, number))
 	local items, capacity = populatorFunc()
 	if items == nil then error("[Inventory]: No data returned; populatorFunc must return a table of items as the first return value.") end
 	if not capacity or capacity % 1 ~= 0 or capacity <= 0 then 
@@ -2247,12 +2268,12 @@ function InventoryMaker.Build(containers: { IMContainer._Container }, itemspace:
 		connectFilledGuiEvents(_inventoryMakerProps, filledGui, container)
 		
 		if container._name == IMConstants.CONTAINER_HOTBAR_NAME then
-			bindHotbarKey(container, _inventoryMakerProps._data::_DATA, slotIndex, cIndex)
+			bindHotbarKey(container, _inventoryMakerProps._data::DATA, slotIndex, cIndex)
 		end
 	end
 	
 	local function initHotbarContainer(container: IMContainer._Container)
-		toggleHotbarCollapse(_inventoryMakerProps._data::_DATA, container, false)
+		toggleHotbarCollapse(_inventoryMakerProps._data::DATA, container, false)
 		if container._hotbarConfigs then
 			local onKeyPress = container._hotbarConfigs.OnKeyPress
 
@@ -2263,7 +2284,7 @@ function InventoryMaker.Build(containers: { IMContainer._Container }, itemspace:
 			end
 
 			IMHotbar.ConnectKeybinds()
-            IMHotbar.SetDataRef(_inventoryMakerProps._data::_DATA)
+            IMHotbar.SetDataRef(_inventoryMakerProps._data::DATA)
             IMHotbar.ConnectScrollingHotbarEvent(container, function(item: ITEM_TYPE?, slotIndex: number)
                 local filledGui = IMContainer.GetFilledGuiFromIndex(container, slotIndex)
                 setEquippedItem(_inventoryMakerProps, item, filledGui, container, false, true)
@@ -2297,7 +2318,7 @@ function InventoryMaker.Build(containers: { IMContainer._Container }, itemspace:
 	local currContainer = containers[currContainerIndex]
 	if InventoryMaker.USING_IMS == false then
 		local items = _inventoryMakerProps._data
-		local data = table.create(_inventoryMakerProps._capacity, false)::_DATA
+		local data = table.create(_inventoryMakerProps._capacity, false)::DATA
 
 		for slotIndex = 1, invCapacity do
 			local item = items[slotIndex]
@@ -2471,7 +2492,7 @@ function InventoryMaker.AddItem(newItem: ITEM_TYPE, stackOnAdd: boolean?): boole
 		end
 		
 		if c._name == IMConstants.CONTAINER_HOTBAR_NAME then
-			bindHotbarKey(c, _inventoryMakerProps._data::_DATA, slotIndex, cIndex)
+			bindHotbarKey(c, _inventoryMakerProps._data::DATA, slotIndex, cIndex)
 		end
 	end
 
@@ -2597,7 +2618,7 @@ function InventoryMaker.AddItemAtIndex(slotIndex: number, newItem: ITEM_TYPE, st
 		end
 		
 		if c._name == IMConstants.CONTAINER_HOTBAR_NAME then
-			bindHotbarKey(c, _inventoryMakerProps._data::_DATA, slotIndex, cIndex)
+			bindHotbarKey(c, _inventoryMakerProps._data::DATA, slotIndex, cIndex)
 		end
 	end
 
@@ -2689,7 +2710,7 @@ function InventoryMaker.RemoveItem(slotIndex: number): boolean
     _inventoryMakerProps._data[slotIndex] = false
     _inventoryMakerProps._currSize -= 1
     if targetContainer._name == IMConstants.CONTAINER_HOTBAR_NAME then
-        toggleHotbarCollapse(_inventoryMakerProps._data::_DATA, targetContainer, _inventoryMakerProps._toggled and true or false)
+        toggleHotbarCollapse(_inventoryMakerProps._data::DATA, targetContainer, _inventoryMakerProps._toggled and true or false)
         unbindHotbarKey(targetContainer, slotIndex)
     end
 
@@ -2939,7 +2960,7 @@ function InventoryMaker.DefineStackingConfigs(configs: {
 	UpdateStackFunc: StackingUpdateFunc,
 	ValidateSplitFunc: SplittingValidateFunc,
 	UpdateSplitFunc: SplittingUpdateFunc,
-	})
+})
 	if not configs.ValidateStackFunc then error("[InventoryMaker]: Missing ValidateStackFunc for stacking configs.") end
 	if not configs.UpdateStackFunc then error("[InventoryMaker]: Missing UpdateStackFunc for stacking configs.") end
 	if not configs.ValidateSplitFunc then error("[InventoryMaker]: Missing ValidateSplitFunc for stacking configs.") end
@@ -3133,7 +3154,7 @@ end
 --[[
 	Define the same EquippedRenderFunc for all provided containers
 ]]
-function InventoryMaker.DefineRenderEquippedSlots(containers: { IMContainer.Container }, renderFunc: IMContainer.EquippedRenderFunc)
+function InventoryMaker.DefineRenderEquippedSlots(containers: { Container }, renderFunc: IMContainer.EquippedRenderFunc)
 	for i = 1, #containers do
         containers[i]:DefineRenderEquippedSlot(renderFunc)
 	end
@@ -3237,7 +3258,7 @@ function InventoryMaker.IncreaseCapacity(targetContainerName: string, amount: nu
 		error(string.format("[InventoryMaker]: targetContainer (%s) does not exist", targetContainerName))
 	end
 
-	local newData = table.create(_inventoryMakerProps._capacity + amount, false)::_DATA
+	local newData = table.create(_inventoryMakerProps._capacity + amount, false)::DATA
 	table.move(_inventoryMakerProps._data, 1, targetContainer._invEndIndex, 1, newData)
 	table.move(_inventoryMakerProps._data, targetContainer._invEndIndex+1, _inventoryMakerProps._capacity , targetContainer._invEndIndex+1+amount, newData)
 	
@@ -3311,7 +3332,7 @@ function InventoryMaker.DecreaseCapacity(targetContainerName: string, amount: nu
 	-- destroy the slots that are collapsed
 	-- update the remaining slots
 	local newContainerCapacity = targetContainer._capacity - amount
-	local newContainerData = table.create(newContainerCapacity, false)::_DATA
+	local newContainerData = table.create(newContainerCapacity, false)::DATA
 	local amountLeft = amount
 	local newContainerIndex = 1
 	local oldContainerIndex = 0
@@ -3336,7 +3357,7 @@ function InventoryMaker.DecreaseCapacity(targetContainerName: string, amount: nu
 	IMContainer.ReconcileSlotGuiObjs(targetContainer, prevSlotGuiObjsLen, amount)
 	
 	-- copy over data to smaller array 
-	local newData = table.create(_inventoryMakerProps._capacity - amount, false)::_DATA
+	local newData = table.create(_inventoryMakerProps._capacity - amount, false)::DATA
 	table.move(_inventoryMakerProps._data, 1, targetContainer._invStartIndex-1, 1, newData)
 	table.move(newContainerData, 1, newContainerCapacity, targetContainer._invStartIndex, newData)
 	table.move(_inventoryMakerProps._data, targetContainer._invEndIndex+1, _inventoryMakerProps._capacity, targetContainer._invEndIndex+1-amount, newData)
@@ -3444,10 +3465,10 @@ end
 		local someData: Data = { item1, item2, item3, <strong>false</strong>, item4, <strong>false</strong>, item5 }
 	
 ]]
-function InventoryMaker.Raw(): _DATA
+function InventoryMaker.Raw(): DATA
 	if _inventoryMakerProps._data == nil then error("No inventory data to send.") end
 
-	return IMUtility.DeepCopyTable(_inventoryMakerProps._data)::_DATA
+	return IMUtility.DeepCopyTable(_inventoryMakerProps._data)::DATA
 end
 
 
