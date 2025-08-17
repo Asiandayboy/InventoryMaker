@@ -5,12 +5,12 @@
 
 	Created by: robloxdestroyer1035
 	Version: v1.3.0
-	Last Updated: 8/1/25
+	Last Updated: 8/16/25
 
 	-----------------------------------------------------------------------------
 	InventoryMakerServer (IMS)
 	-----------------------------------------------------------------------------
-    v1.3.0 Update Log (8/1/25)
+    v1.3.0 Update Log (8/16/25)
         - [New Method]: Inventory:GetItem()
         - [New Method]: Inventory:AddItemAtIndex()
 
