@@ -36,6 +36,7 @@
         - [Changed]: Made IMS remote callbacks optional
         - [Changed]: Exported Container type; not really sure why I didn't do this already...
         - [Changed]: Exported DATA type, which represents the type of the underlying inventory data array
+        - [Fix]: Fixed some typechecking errors
 
     v1.2.1 Update Log (6/8/25)
         - [Bug Fix]: Old gui objects was used when equipping a new item after switching across containers, resulting in a nil error
@@ -2248,11 +2249,14 @@ end
 	in c1 and c4. Therefore, if c2 and c3 have reached its max capacity, AddItem() will fail to add any more 
 	new items, thus returning false.
 ]]
-function InventoryMaker.Build(containers: { IMContainer._Container }, itemspace: { IMContainer._Container }?)
+function InventoryMaker.Build(containers: { IMContainer.Container }, itemspace: { IMContainer.Container }?)
 	if not _inventoryMakerProps._data then error("[InventoryMaker]: Data is required to build your inventory.") end
 	if not _inventoryMakerProps._data then error("No inventory data to build.") end
 	if #containers == 0 then error("[InventoryMaker]: Containers are required to build an inventory.") end
 	
+    local CONTAINERS: { IMContainer._Container } = containers::{ IMContainer._Container }
+    local ITEMSPACE: { IMContainer._Container } = itemspace::{ IMContainer._Container }
+
 	local configs = _inventoryMakerProps._SEARCH_BAR_CONFIGS
 	if configs and (not configs.SearchBarInputGui or not configs.TransformTextFunc or not configs.FilterFunc) then
 		error("[InventoryMaker]: Search bar configs have missing fields.", 2)
@@ -2292,16 +2296,16 @@ function InventoryMaker.Build(containers: { IMContainer._Container }, itemspace:
 		end
 	end
 	
-	if itemspace then
-		for i = 1, #itemspace do
-			itemspace[i]._inItemspace = true
+	if ITEMSPACE then
+		for i = 1, #ITEMSPACE do
+			ITEMSPACE[i]._inItemspace = true
 		end
 	end
 	
 	-- initialize containers: set start and end indicies and set itemspace boolean
 	local lastIndex = 1
-	for i = 1, #containers do
-		local container = containers[i]
+	for i = 1, #CONTAINERS do
+		local container = CONTAINERS[i]
 		
 		container._invStartIndex = lastIndex
 		container._invEndIndex = lastIndex + container._capacity - 1
@@ -2315,7 +2319,7 @@ function InventoryMaker.Build(containers: { IMContainer._Container }, itemspace:
 	
 	-- fill the inventory with the initial data based on container rules and itemspace
 	local currContainerIndex = 1
-	local currContainer = containers[currContainerIndex]
+	local currContainer = CONTAINERS[currContainerIndex]
 	if InventoryMaker.USING_IMS == false then
 		local items = _inventoryMakerProps._data
 		local data = table.create(_inventoryMakerProps._capacity, false)::DATA
@@ -2326,7 +2330,7 @@ function InventoryMaker.Build(containers: { IMContainer._Container }, itemspace:
 
 			if currContainer._currSize >= currContainer._capacity then 
 				currContainerIndex += 1
-				currContainer = containers[currContainerIndex]
+				currContainer = CONTAINERS[currContainerIndex]
 			end
 
 			if currContainer:_isItemAllowed(item) and currContainer._inItemspace then
@@ -2336,12 +2340,12 @@ function InventoryMaker.Build(containers: { IMContainer._Container }, itemspace:
 				continue
 			end
 
-			for j = currContainerIndex+1, #containers do
-				local targetContainer = containers[j]
+			for j = currContainerIndex+1, #CONTAINERS do
+				local targetContainer = CONTAINERS[j]
 				if not targetContainer._inItemspace then continue end
 				if not (targetContainer::IMContainer._Container):_isItemAllowed(item) then continue end
 
-				local targetIndex = containers[j-1]._invEndIndex + targetContainer._currSize + 1
+				local targetIndex = CONTAINERS[j-1]._invEndIndex + targetContainer._currSize + 1
 				data[targetIndex] = item
 				targetContainer._currSize += 1
 				_inventoryMakerProps._currSize += 1
@@ -2353,7 +2357,7 @@ function InventoryMaker.Build(containers: { IMContainer._Container }, itemspace:
 	end
 	
 	lastIndex = 1
-	for i,container in ipairs(containers) do
+	for i,container in ipairs(CONTAINERS) do
 		local capacity = container._capacity
 		do
 			if _inventoryMakerProps._containers[container._name] then
@@ -3700,12 +3704,6 @@ InventoryMaker.IMS = {}::{
 
 function InventoryMaker.IMS.DefineRemotesToServer(callbacks: RemoteCallbacks)
 	if not InventoryMaker.USING_IMS then error("[InventoryMaker]: Cannot use IMS functions; USING_IMS mode is not enabled.") end
-	
-	if not callbacks.OnSwitch then error("[InventoryMaker]: OnSwitch callback missing.") end
-	if not callbacks.OnStack then error("[InventoryMaker]: OnStack callback missing.") end
-	if not callbacks.OnSplit then error("[InventoryMaker]: OnSplit callback missing.") end
-	if not callbacks.OnEquip then error("[InventoryMaker]: OnEquip callback missing.") end
-    if not callbacks.OnSort then error("[InventoryMaker]: OnSort callback missing.") end
 	
 	IMS._CALLBACKS = callbacks
 end
