@@ -893,11 +893,14 @@ local function forceOpenHoverPrompt(props: _InventoryMakerProps, container: IMCo
 	setActiveSlot(props, item, filledGui, draggable)
 	local prompt = IMContainer.GetHoverPromptSingleton(container, props._PARENT_CONTAINER_SCREEN_GUI)
 	if not prompt then return end
+
+    local slotIndex = getSlotIndexFromSlot(filledGui.Parent::GuiObject)::number
+    local containerIndex = IMContainer.GetContainerIndexFromSlotIndex(container, slotIndex)
 	
 	if hoverInfo._FIXED_POSITION then
-		IMContainer.FixedHoverPrompt(container, prompt, item, filledGui)
+		IMContainer.FixedHoverPrompt(container, prompt, item, filledGui, slotIndex, containerIndex)
 	else
-		IMContainer.NonFixedHoverPrompt(container, prompt, item, filledGui, UIS:GetMouseLocation())
+		IMContainer.NonFixedHoverPrompt(container, prompt, item, filledGui, UIS:GetMouseLocation(), slotIndex, containerIndex)
 	end
 end
 
@@ -1029,7 +1032,14 @@ local function openHoveredContextMenu(props: _InventoryMakerProps, container: IM
 		closeAllHoverPrompts(props._containers, props._PARENT_CONTAINER_SCREEN_GUI)
 		if hoverPrompt then 
 			hoverPrompt.Visible = true
-			hoverInfo._RENDER_FUNC(item, hoverPrompt) 
+
+            local itemPositionInfo: ItemPositionInfo = {
+                ContainerName = containerName,
+                ContainerIndex = IMContainer.GetContainerIndexFromSlotIndex(container, slotIndex),
+                SlotIndex = slotIndex
+            }
+
+			hoverInfo._RENDER_FUNC(item, hoverPrompt, itemPositionInfo) 
 		end
 	end
 	-- position context menu next to the last opened context menu
@@ -1190,6 +1200,7 @@ local function openStaticContextMenu(props: _InventoryMakerProps, container: IMC
 	local contextMenuInfo = props._USER_CONTEXT_MENUS[menuIndex]
 	local userOffset = contextMenuInfo._OFFSET
 	local userOffsetUDim2 = UDim2.fromOffset(userOffset.X, userOffset.Y)
+    local slotIndex = getSlotIndexFromSlot(filledGui.Parent::GuiObject)::number
 	
 	local hoverInfo = container._HOVER_INFO
 	local hoverPrompt = IMContainer.GetHoverPromptSingleton(container, props._PARENT_CONTAINER_SCREEN_GUI)
@@ -1197,7 +1208,14 @@ local function openStaticContextMenu(props: _InventoryMakerProps, container: IMC
 		if props._SHOW_HOVER_PROMPT_NEXT_TO_MENU and hoverPrompt then
 			closeAllHoverPrompts(props._containers, props._PARENT_CONTAINER_SCREEN_GUI)
 			hoverPrompt.Visible = true
-			hoverInfo._RENDER_FUNC(item, hoverPrompt)
+
+            local itemPositionInfo: ItemPositionInfo = {
+                ContainerName = containerName,
+                ContainerIndex = IMContainer.GetContainerIndexFromSlotIndex(container, slotIndex),
+                SlotIndex = slotIndex
+            }
+
+			hoverInfo._RENDER_FUNC(item, hoverPrompt, itemPositionInfo)
 		else
 			IMContainer.HideHoverPrompt(hoverPrompt)
 		end
@@ -1205,7 +1223,6 @@ local function openStaticContextMenu(props: _InventoryMakerProps, container: IMC
 	local promptSize = hoverPrompt and hoverPrompt.AbsoluteSize or Vector2.zero
 	local contextMenuPos: UDim2 = UDim2.new(0, guiPos.X + guiSize.X, 0, guiPos.Y + guiInsetY) + userOffsetUDim2
 	local contextMenuGui = contextMenuInfo._GUI
-	local slotIndex = getSlotIndexFromSlot(filledGui.Parent::GuiObject)::number
 	local cleanupRenderFunc = contextMenuInfo._RENDER_FUNC(slotIndex, item, contextMenuGui, filledGui, containerName)
 	contextMenuGui.ZIndex = 100
 	contextMenuGui.Visible = true
@@ -1412,6 +1429,15 @@ local function connectFilledSlotHoverEventsForStaticContainer(props: _InventoryM
     local fixedPos = hoverInfo._FIXED_POSITION
     local prompt = IMContainer.GetHoverPromptSingleton(staticContainer, props._PARENT_CONTAINER_SCREEN_GUI)
     if not prompt then return end
+
+    --[[
+        Everytime :Close() is called, it will hide the hover prompt
+    ]]
+    local onClosedFunc = staticContainer._CALLBACKS._ON_CLOSED_FUNC
+    staticContainer:DefineClose(function()
+        IMContainer.HideHoverPrompt(prompt)
+        onClosedFunc(staticContainer._PARENT_CONTAINER)
+    end)
     
     if fixedPos then
    		filledGui.InputBegan:Connect(function(input)
@@ -1422,7 +1448,7 @@ local function connectFilledSlotHoverEventsForStaticContainer(props: _InventoryM
 				if isItemActiveSlot(props::_InventoryMakerProps, item) then return end
 				setActiveSlot(props::_InventoryMakerProps, item, filledGui)
 				
-				IMContainer.FixedHoverPrompt(staticContainer, prompt, item, filledGui)
+				IMContainer.FixedHoverPrompt(staticContainer, prompt, item, filledGui, containerIndex, containerIndex)
 			end
 		end)     
     else
@@ -1435,7 +1461,7 @@ local function connectFilledSlotHoverEventsForStaticContainer(props: _InventoryM
 					setActiveSlot(props::_InventoryMakerProps, item, filledGui)
 				end
 				
-				IMContainer.NonFixedHoverPrompt(staticContainer, prompt, item, filledGui, UIS:GetMouseLocation())
+				IMContainer.NonFixedHoverPrompt(staticContainer, prompt, item, filledGui, UIS:GetMouseLocation(), containerIndex, containerIndex)
 			end
 		end)
     end
@@ -1485,8 +1511,11 @@ local function connectFilledSlotHoverEvents(props: _InventoryMakerProps,
 				if isItemActiveSlot(props::_InventoryMakerProps, item) then return end
 				if draggable and IMDraggableUI.IsDragging(draggable) then return end
 				setActiveSlot(props::_InventoryMakerProps, item, filledGui, draggable)
+
+                local slotIndex = getSlotIndexFromSlot(filledGui.Parent::GuiObject)::number
+                local containerIndex = IMContainer.GetContainerIndexFromSlotIndex(container, slotIndex)
 				
-				IMContainer.FixedHoverPrompt(container, prompt, item, filledGui)
+				IMContainer.FixedHoverPrompt(container, prompt, item, filledGui, slotIndex, containerIndex)
 			end
 		end)
 	else
@@ -1503,8 +1532,11 @@ local function connectFilledSlotHoverEvents(props: _InventoryMakerProps,
 					setActiveSlot(props::_InventoryMakerProps, item, filledGui, draggable)
 				end
 				if draggable and IMDraggableUI.IsDragging(draggable) then return end
+
+                local slotIndex = getSlotIndexFromSlot(filledGui.Parent::GuiObject)::number
+                local containerIndex = IMContainer.GetContainerIndexFromSlotIndex(container, slotIndex)
 				
-				IMContainer.NonFixedHoverPrompt(container, prompt, item, filledGui, UIS:GetMouseLocation())
+				IMContainer.NonFixedHoverPrompt(container, prompt, item, filledGui, UIS:GetMouseLocation(), slotIndex, containerIndex)
 			end
 		end)
 	end

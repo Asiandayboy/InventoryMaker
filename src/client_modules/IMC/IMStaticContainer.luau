@@ -5,6 +5,12 @@ local Constants = require(script.Parent.IMConstants)
 
 export type ActivatedCallbackStatic = (item: any, filledGui: GuiObject, containerIndex: number) -> ()
 
+type ItemPositionInfo = {
+	SlotIndex: number,
+	ContainerIndex: number,
+	ContainerName: string
+}
+
 type GridLayoutParams = {
 	CellPadding: UDim2?,
 	CellSize: UDim2?,
@@ -20,14 +26,14 @@ type HoverPromptConfigs = {
 	GuiTemplate: GuiObject,
 	FixedPosition: boolean,
 	Offset: Vector2,
-	RenderFunc: (item: any, hoverPromptGui: GuiObject) -> (),
+	RenderFunc: (item: any, hoverPromptGui: GuiObject, positionInfo: ItemPositionInfo) -> (),
 }
 
 type _HoverPromptInfo = {
 	_TEMPLATE: GuiObject,
 	_OFFSET: UDim2,
 	_FIXED_POSITION: boolean,
-	_RENDER_FUNC: (item: any, gui: GuiObject) -> (),
+	_RENDER_FUNC: (item: any, gui: GuiObject, positionInfo: ItemPositionInfo) -> (),
 	_GUI: GuiObject?,
 	_INSET: UDim2?,
 	_OPEN_HOVER_PROMPT_AFTER_DRAGGING: boolean,
