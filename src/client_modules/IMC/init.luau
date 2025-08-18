@@ -2404,13 +2404,13 @@ end
     Builds the static container after it has been configured, and takes in an 
     inventory data to render.
 ]]
-function InventoryMaker.BuildStaticContainer(staticContainer: IMStaticContainer._StaticContainer, staticContainerData: { ITEM_TYPE })
-    IMStaticContainer.InitStaticContainer(staticContainer, staticContainerData, function(filledGui: GuiObject, containerIndex: number)  
+function InventoryMaker.BuildStaticContainer(staticContainer: IMStaticContainer.StaticContainer, staticContainerData: { any })
+    IMStaticContainer.InitStaticContainer(staticContainer::IMStaticContainer._StaticContainer, staticContainerData, function(filledGui: GuiObject, containerIndex: number)  
         if IMInput.GetInputType() == IMInput.INPUT_TOUCH then
             filledGui.Active = true
         end
-        connectActivatedEventForStaticContainer(staticContainer, filledGui, containerIndex)
-        connectFilledSlotHoverEventsForStaticContainer(_inventoryMakerProps, staticContainer, filledGui, containerIndex)
+        connectActivatedEventForStaticContainer(staticContainer::IMStaticContainer._StaticContainer, filledGui, containerIndex)
+        connectFilledSlotHoverEventsForStaticContainer(_inventoryMakerProps, staticContainer::IMStaticContainer._StaticContainer, filledGui, containerIndex)
     end)
 end
 
@@ -2418,9 +2418,9 @@ end
     Calls the :Close() method on the static container and then destroys the 
     container entirely, removing it from memory.
 ]]
-function InventoryMaker.DestroyStaticContainer(staticContainer: IMStaticContainer._StaticContainer)
+function InventoryMaker.DestroyStaticContainer(staticContainer: IMStaticContainer.StaticContainer)
     staticContainer:Close()
-    IMStaticContainer.DestroyStaticContainer(staticContainer)
+    IMStaticContainer.DestroyStaticContainer(staticContainer::IMStaticContainer._StaticContainer)
 end
 
 --[[

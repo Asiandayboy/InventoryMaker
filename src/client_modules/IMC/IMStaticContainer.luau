@@ -2,10 +2,8 @@
 local StaticContainer = {}
 
 local Constants = require(script.Parent.IMConstants)
-local UserType = require(script.Parent.IMUserType)
 
-type ITEM_TYPE = UserType.USER_ITEM_TYPE
-export type ActivatedCallbackStatic = (item: ITEM_TYPE, filledGui: GuiObject, containerIndex: number) -> ()
+export type ActivatedCallbackStatic = (item: any, filledGui: GuiObject, containerIndex: number) -> ()
 
 type GridLayoutParams = {
 	CellPadding: UDim2?,
@@ -22,15 +20,14 @@ type HoverPromptConfigs = {
 	GuiTemplate: GuiObject,
 	FixedPosition: boolean,
 	Offset: Vector2,
-	RenderFunc: (item: ITEM_TYPE, hoverPromptGui: GuiObject) -> (),
-	ShowPromptAfterDragging: boolean?,
+	RenderFunc: (item: any, hoverPromptGui: GuiObject) -> (),
 }
 
 type _HoverPromptInfo = {
 	_TEMPLATE: GuiObject,
 	_OFFSET: UDim2,
 	_FIXED_POSITION: boolean,
-	_RENDER_FUNC: (item: ITEM_TYPE, gui: GuiObject) -> (),
+	_RENDER_FUNC: (item: any, gui: GuiObject) -> (),
 	_GUI: GuiObject?,
 	_INSET: UDim2?,
 	_OPEN_HOVER_PROMPT_AFTER_DRAGGING: boolean,
@@ -76,7 +73,7 @@ export type StaticContainer = {
             type StaticContainerFilledConfigs = {
                 GuiTemplate: GuiObject, 
                 RenderFunc: (
-                    item: ITEM_TYPE, 
+                    item: any, 
                     filledGui: GuiObject, 
                     containerIndex: number,
                     ...any
@@ -90,7 +87,7 @@ export type StaticContainer = {
         An item is activated when it is left-clicked (mobile), double-tapped (mobile, nonhotbar),
         or tapped (mobile, tapped)
 
-            type ActivatedCallbackStatic = (item: ITEM_TYPE, filledGui: GuiObject, containerIndex: number) -> ()
+            type ActivatedCallbackStatic = (item: any, filledGui: GuiObject, containerIndex: number) -> ()
     ]]
 	DefineActivatedCallback: (self: StaticContainer, callback: ActivatedCallbackStatic) -> (),
 
@@ -143,14 +140,14 @@ type StaticContainerEmptyConfigs = {
 
 type StaticContainerFilledConfigs = {
     GuiTemplate: GuiObject, 
-    RenderFunc: (item: ITEM_TYPE, filledGui: GuiObject, containerIndex: number, ...any) -> ()
+    RenderFunc: (item: any, filledGui: GuiObject, containerIndex: number, ...any) -> ()
 }
 
 export type _StaticContainer = {
     _opened: boolean,
     _name: string,
     _capacity: number,
-    _data: { ITEM_TYPE },
+    _data: { any },
     _slotGuiObjs: { GuiObject },
     _hoverPromptParent: ScreenGui,
     _PARENT_CONTAINER: GuiObject,
@@ -158,7 +155,7 @@ export type _StaticContainer = {
     _EMPTY_TEMPLATE: GuiObject,
     _FILLED_TEMPLATE: GuiObject,
     _RENDER_EMPTY_FUNC: ((emptyGui: GuiObject, containerIndex: number) -> ())?,
-    _RENDER_FILLED_FUNC: (item: ITEM_TYPE, filledGui: GuiObject, containerIndex: number, ...any) -> (),
+    _RENDER_FILLED_FUNC: (item: any, filledGui: GuiObject, containerIndex: number, ...any) -> (),
 
     _HOVER_INFO: _HoverPromptInfo,
 
@@ -236,7 +233,7 @@ function StaticContainer.NewStaticContainer(name: string, capacity: number): Sta
 				_FIXED_POSITION = configs.FixedPosition or false,
 				_OFFSET = offset,
 				_RENDER_FUNC = configs.RenderFunc,
-				_OPEN_HOVER_PROMPT_AFTER_DRAGGING = configs.ShowPromptAfterDragging or false
+				_OPEN_HOVER_PROMPT_AFTER_DRAGGING = false
 			}
         end,
 
@@ -286,7 +283,7 @@ local function createStaticContainerEmptySlot(staticContainer: _StaticContainer,
 	return gui
 end
 
-local function createStaticContainerFilledSlot(staticContainer: _StaticContainer, item: ITEM_TYPE, containerIndex: number): (GuiObject, GuiObject)
+local function createStaticContainerFilledSlot(staticContainer: _StaticContainer, item: any, containerIndex: number): (GuiObject, GuiObject)
     local slot = createStaticContainerEmptySlot(staticContainer, containerIndex)
 
 	local filledSlotGui = staticContainer._FILLED_TEMPLATE:Clone()
@@ -298,7 +295,7 @@ local function createStaticContainerFilledSlot(staticContainer: _StaticContainer
 	return filledSlotGui, slot
 end
 
-function StaticContainer.InitStaticContainer(staticContainer: _StaticContainer, staticContainerData: { ITEM_TYPE }, 
+function StaticContainer.InitStaticContainer(staticContainer: _StaticContainer, staticContainerData: { any }, 
     onFilledSlotCreatedCallback: (filledGui: GuiObject, containerIndex: number) -> ()
 )
     if #staticContainerData > staticContainer._capacity then
