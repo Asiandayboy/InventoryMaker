@@ -7,7 +7,7 @@
 	
 	Created by: robloxdestroyer1035
 	Version: v1.3.0
-	Last Updated: 8/16/25
+	Last Updated: 8/18/25
 	
 	-----------------------------------------------------------------------------
 	InventoryMakerClient (IMC)
