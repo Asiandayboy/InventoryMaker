@@ -1427,7 +1427,7 @@ local function connectFilledSlotHoverEventsForStaticContainer(props: _InventoryM
     if not hoverInfo then return end
 
     local fixedPos = hoverInfo._FIXED_POSITION
-    local prompt = IMContainer.GetHoverPromptSingleton(staticContainer, props._PARENT_CONTAINER_SCREEN_GUI)
+    local prompt = IMContainer.GetHoverPromptSingleton(staticContainer, staticContainer._HOVER_PROMPT_SCREEN_GUI)
     if not prompt then return end
 
     --[[
@@ -1436,7 +1436,9 @@ local function connectFilledSlotHoverEventsForStaticContainer(props: _InventoryM
     local onClosedFunc = staticContainer._CALLBACKS._ON_CLOSED_FUNC
     staticContainer:DefineClose(function()
         IMContainer.HideHoverPrompt(prompt)
-        onClosedFunc(staticContainer._PARENT_CONTAINER)
+        if onClosedFunc then
+            onClosedFunc(staticContainer._PARENT_CONTAINER)
+        end
     end)
     
     if fixedPos then
@@ -2451,8 +2453,9 @@ end
     container entirely, removing it from memory.
 ]]
 function InventoryMaker.DestroyStaticContainer(staticContainer: IMStaticContainer.StaticContainer)
-    staticContainer:Close()
-    IMStaticContainer.DestroyStaticContainer(staticContainer::IMStaticContainer._StaticContainer)
+    local c = staticContainer::IMStaticContainer._StaticContainer
+    c:Close()
+    IMStaticContainer.DestroyStaticContainer(c)
 end
 
 --[[

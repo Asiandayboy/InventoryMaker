@@ -1,6 +1,9 @@
 --!strict
 local StaticContainer = {}
 
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer::Player
+local playerGui = player.PlayerGui
 local Constants = require(script.Parent.IMConstants)
 
 export type ActivatedCallbackStatic = (item: any, filledGui: GuiObject, containerIndex: number) -> ()
@@ -150,6 +153,7 @@ type StaticContainerFilledConfigs = {
 }
 
 export type _StaticContainer = {
+    _type: string,
     _opened: boolean,
     _name: string,
     _capacity: number,
@@ -159,6 +163,7 @@ export type _StaticContainer = {
     _PARENT_CONTAINER: GuiObject,
     _GRID_LAYOUT: UIGridLayout,
     _EMPTY_TEMPLATE: GuiObject,
+    _HOVER_PROMPT_SCREEN_GUI: ScreenGui,
     _FILLED_TEMPLATE: GuiObject,
     _RENDER_EMPTY_FUNC: ((emptyGui: GuiObject, containerIndex: number) -> ())?,
     _RENDER_FILLED_FUNC: (item: any, filledGui: GuiObject, containerIndex: number, ...any) -> (),
@@ -192,6 +197,7 @@ function StaticContainer.NewStaticContainer(name: string, capacity: number): Sta
         _opened = false,
         _CALLBACKS = {},
         _slotGuiObjs = {},
+        _type = "Static",
         
         DefineLayout = function(self: _StaticContainer, params: GridLayoutParams)
             if (params.ParentContainer::GuiObject?) == nil then error("[Inventory]: A parent GUI container must be provided for grid layout.") end
@@ -241,6 +247,13 @@ function StaticContainer.NewStaticContainer(name: string, capacity: number): Sta
 				_RENDER_FUNC = configs.RenderFunc,
 				_OPEN_HOVER_PROMPT_AFTER_DRAGGING = false
 			}
+
+            local staticContainerHoverPromptScreenGui = Instance.new("ScreenGui")
+            staticContainerHoverPromptScreenGui.Name = "HOVER_PROMPT_"..self._name
+            staticContainerHoverPromptScreenGui.ResetOnSpawn = false
+            staticContainerHoverPromptScreenGui.Parent = playerGui
+
+            self._HOVER_PROMPT_SCREEN_GUI = staticContainerHoverPromptScreenGui
         end,
 
         DefineOpen = function(self: _StaticContainer, func: (parentContainer: GuiObject, ...any) -> ())
@@ -327,6 +340,7 @@ function StaticContainer.DestroyStaticContainer(staticContainer: _StaticContaine
     for i, v in staticContainer._slotGuiObjs do
         v:Destroy()
     end
+    staticContainer._HOVER_PROMPT_SCREEN_GUI:Destroy()
     table.clear(staticContainer._slotGuiObjs)
     table.clear(staticContainer::{ [string]: any })
 end

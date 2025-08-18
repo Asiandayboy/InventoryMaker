@@ -267,6 +267,7 @@ export type _Container = {
 	_hoverPromptParent: ScreenGui,
 	_hotbarConfigs: HotbarConfigs,
 	_inItemspace: boolean,
+    _type: string,
 	
 	_PARENT_CONTAINER: GuiObject,
 	_GRID_LAYOUT: UIGridLayout,
@@ -411,6 +412,7 @@ function IMContainer.new(name: string, capacity: number, flags: number): Contain
 		_HOVER_INFO = nil,
 		_draggables = {},
 		_slotGuiObjs = {},
+        _type = "Container",
 		_dummyFilledGuis = {},
 		_flags = flags,
 		_inItemspace = false,
@@ -672,7 +674,11 @@ function IMContainer.GetHoverPromptSingleton(container: _Container | _StaticCont
 		gui.Name = Constants.HOVER_NAME_PREFIX..container._name
 		gui.Visible = false
 		gui.AnchorPoint = Vector2.zero
-		gui.ZIndex = 100
+
+        if container._type == "Container" then
+            gui.ZIndex = 100
+        end
+        
 		gui.Parent = screenGui
 		container._hoverPromptParent = screenGui
 	end
