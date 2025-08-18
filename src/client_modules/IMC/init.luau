@@ -36,6 +36,7 @@
         - [Changed]: Made IMS remote callbacks optional
         - [Changed]: Exported Container type; not really sure why I didn't do this already...
         - [Changed]: Exported DATA type, which represents the type of the underlying inventory data array
+        - [Changed]: HoverPrompt Render now passes in ItemPositionInfo
         - [Fix]: Fixed some typechecking errors
 
     v1.2.1 Update Log (6/8/25)
