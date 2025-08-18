@@ -251,6 +251,7 @@ function StaticContainer.NewStaticContainer(name: string, capacity: number): Sta
             local staticContainerHoverPromptScreenGui = Instance.new("ScreenGui")
             staticContainerHoverPromptScreenGui.Name = "HOVER_PROMPT_"..self._name
             staticContainerHoverPromptScreenGui.ResetOnSpawn = false
+            staticContainerHoverPromptScreenGui.DisplayOrder = 100
             staticContainerHoverPromptScreenGui.Parent = playerGui
 
             self._HOVER_PROMPT_SCREEN_GUI = staticContainerHoverPromptScreenGui
