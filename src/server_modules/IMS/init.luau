@@ -5,14 +5,16 @@
 
 	Created by: robloxdestroyer1035
 	Version: v1.3.0
-	Last Updated: 8/16/25
+	Last Updated: 8/23/25
 
 	-----------------------------------------------------------------------------
 	InventoryMakerServer (IMS)
 	-----------------------------------------------------------------------------
-    v1.3.0 Update Log (8/16/25)
+    v1.3.0 Update Log (8/23/25)
         - [New Method]: Inventory:GetItem()
         - [New Method]: Inventory:AddItemAtIndex()
+        - [Fix]: Fixed Itemspace not being ignored during the initial Build(), 
+            which is very important for making sure item load in their correct positions
 
     v1.2.1 Update Log (6/8/25)
         - No updates for IMS
@@ -553,8 +555,9 @@ function Inventory.new(capacity: number, inventoryData: _DATA): Inventory
 	}
 	
 
-	function props.Build(self: _Inventory, containers: { Container }, itemspace: { Container }?)
+    function props.Build(self: _Inventory, containers: { Container }, itemspace: { Container }?)
 		if not self._player then throwError("Player not set.") end
+        if #inventoryData > capacity then throwError("Length of inventory data is greater than inventory capacity.") end
 		
 		if itemspace then
 			for i = 1, #itemspace do
@@ -577,28 +580,42 @@ function Inventory.new(capacity: number, inventoryData: _DATA): Inventory
 			lastIndex = lastIndex + container._capacity
 		end
 		
-		-- fill the inventory with the initial data based on container rules and itemspace
+		--[[
+            fill the inventory with the initial data based on container rules and itemspace
+            
+            Itemspace is IGNORED during the building stage.
+        ]]
 		local currContainerIndex = 1
 		local currContainer = self._containers[currContainerIndex]
 		for slotIndex = 1, capacity do
 			local item = inventoryData[slotIndex]
 			if not item then continue end
 			
+            -- fill the first container until full capacity
 			if currContainer._currSize >= currContainer._capacity then 
 				currContainerIndex += 1
 				currContainer = self._containers[currContainerIndex]
 			end
 			
-			if currContainer:_IsItemAllowed(item) and currContainer._inItemspace then
+            --[[
+                Need to also check if it's an empty slot to make sure we're not
+                overwriting a slot that was filled by the fallback logic below.
+                That's why we do "not self._data[slotIndex]"
+            ]]
+			if currContainer:_IsItemAllowed(item) and not self._data[slotIndex] then
 				self._data[slotIndex] = item
 				currContainer._currSize += 1
 				self._currSize += 1
 				continue
 			end
 			
+            --[[
+                If it can't go in the first container, find the next container
+                it fits into and add it in that
+            ]]
 			for j = currContainerIndex+1, #self._containers do
 				local targetContainer = self._containers[j]
-				if not targetContainer._inItemspace then continue end
+                if targetContainer._currSize >= targetContainer._capacity then continue end
 				if not (targetContainer::_Container):_IsItemAllowed(item) then continue end
 
 				local targetIndex = self._containers[j-1]._invEndIndex + targetContainer._currSize + 1

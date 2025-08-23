@@ -7,12 +7,12 @@
 	
 	Created by: robloxdestroyer1035
 	Version: v1.3.0
-	Last Updated: 8/18/25
+	Last Updated: 8/23/25
 	
 	-----------------------------------------------------------------------------
 	InventoryMakerClient (IMC)
 	-----------------------------------------------------------------------------
-    v1.3.0 Update Log (8/16/25)
+    v1.3.0 Update Log (8/23/25)
         - [New Feature]: Static Containers; used to render and interact with static inventories. I made
             this primarily to easily render merchant NPCs' inventories that you can sell to and buy from.
             New Methods:
@@ -38,6 +38,7 @@
         - [Changed]: Exported DATA type, which represents the type of the underlying inventory data array
         - [Changed]: HoverPrompt Render now passes in ItemPositionInfo
         - [Fix]: Fixed some typechecking errors
+        - [Fix]: Fix Itemspace bug during Build()
 
     v1.2.1 Update Log (6/8/25)
         - [Bug Fix]: Old gui objects was used when equipping a new item after switching across containers, resulting in a nil error
@@ -2368,7 +2369,7 @@ function InventoryMaker.Build(containers: { IMContainer.Container }, itemspace: 
 				currContainer = CONTAINERS[currContainerIndex]
 			end
 
-			if currContainer:_isItemAllowed(item) and currContainer._inItemspace then
+			if currContainer:_isItemAllowed(item) and not data[slotIndex] then
 				data[slotIndex] = item
 				currContainer._currSize += 1
 				_inventoryMakerProps._currSize += 1
@@ -2377,7 +2378,7 @@ function InventoryMaker.Build(containers: { IMContainer.Container }, itemspace: 
 
 			for j = currContainerIndex+1, #CONTAINERS do
 				local targetContainer = CONTAINERS[j]
-				if not targetContainer._inItemspace then continue end
+				if targetContainer._currSize >= targetContainer._capacity then continue end
 				if not (targetContainer::IMContainer._Container):_isItemAllowed(item) then continue end
 
 				local targetIndex = CONTAINERS[j-1]._invEndIndex + targetContainer._currSize + 1
