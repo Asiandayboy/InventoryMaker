@@ -13,8 +13,8 @@
     v1.3.0 Update Log (8/23/25)
         - [New Method]: Inventory:GetItem()
         - [New Method]: Inventory:AddItemAtIndex()
-        - [Fix]: Fixed Itemspace not being ignored during the initial Build(), 
-            which is very important for making sure item load in their correct positions
+        - [WIP - Fix]: Fixed Build Bug; Itemspace should be ignored; items needs to go
+        where there were before instead of filling in the first empty slots
 
     v1.2.1 Update Log (6/8/25)
         - No updates for IMS
@@ -262,8 +262,8 @@ export type Inventory = {
 		in c1 and c4. Therefore, if c2 and c3 have reached its max capacity, AddItem() will fail to add any 
 		more new items, thus returning false.
 		
-		When the inventory is built, the initial inventory data will also respect the itemspace as well
-		as the containers' allowed items.
+		When the inventory is built, the initial inventory data will NOT respect the itemspace or containers'
+        allowed items. This will enable items that are saved to get loaded in their correct positions.
 	]]
     Build: (self: Inventory, containers: { Container }, itemspace: { Container }) -> (),
 
@@ -591,39 +591,18 @@ function Inventory.new(capacity: number, inventoryData: _DATA): Inventory
 			local item = inventoryData[slotIndex]
 			if not item then continue end
 			
-            -- fill the first container until full capacity
+            --[[
+                items at added from index 1 to n, so it must follow the order the containers 
+                were arranged in. This means, it's easy to track which container we're on
+            ]]
 			if currContainer._currSize >= currContainer._capacity then 
 				currContainerIndex += 1
 				currContainer = self._containers[currContainerIndex]
 			end
-			
-            --[[
-                Need to also check if it's an empty slot to make sure we're not
-                overwriting a slot that was filled by the fallback logic below.
-                That's why we do "not self._data[slotIndex]"
-            ]]
-			if currContainer:_IsItemAllowed(item) and not self._data[slotIndex] then
-				self._data[slotIndex] = item
-				currContainer._currSize += 1
-				self._currSize += 1
-				continue
-			end
-			
-            --[[
-                If it can't go in the first container, find the next container
-                it fits into and add it in that
-            ]]
-			for j = currContainerIndex+1, #self._containers do
-				local targetContainer = self._containers[j]
-                if targetContainer._currSize >= targetContainer._capacity then continue end
-				if not (targetContainer::_Container):_IsItemAllowed(item) then continue end
 
-				local targetIndex = self._containers[j-1]._invEndIndex + targetContainer._currSize + 1
-				self._data[targetIndex] = item
-				targetContainer._currSize += 1
-				self._currSize += 1
-				break
-			end
+            self._data[slotIndex] = item
+            currContainer._currSize += 1
+            self._currSize += 1
 		end
 		
 		debugPrint("Inventory built; current size:", self._currSize)

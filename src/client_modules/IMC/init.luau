@@ -2353,7 +2353,6 @@ function InventoryMaker.Build(containers: { IMContainer.Container }, itemspace: 
 	end
 	
 	
-	-- fill the inventory with the initial data based on container rules and itemspace
 	local currContainerIndex = 1
 	local currContainer = CONTAINERS[currContainerIndex]
 	if InventoryMaker.USING_IMS == false then
@@ -2369,24 +2368,9 @@ function InventoryMaker.Build(containers: { IMContainer.Container }, itemspace: 
 				currContainer = CONTAINERS[currContainerIndex]
 			end
 
-			if currContainer:_isItemAllowed(item) and not data[slotIndex] then
-				data[slotIndex] = item
-				currContainer._currSize += 1
-				_inventoryMakerProps._currSize += 1
-				continue
-			end
-
-			for j = currContainerIndex+1, #CONTAINERS do
-				local targetContainer = CONTAINERS[j]
-				if targetContainer._currSize >= targetContainer._capacity then continue end
-				if not (targetContainer::IMContainer._Container):_isItemAllowed(item) then continue end
-
-				local targetIndex = CONTAINERS[j-1]._invEndIndex + targetContainer._currSize + 1
-				data[targetIndex] = item
-				targetContainer._currSize += 1
-				_inventoryMakerProps._currSize += 1
-				break
-			end
+            data[slotIndex] = item
+            currContainer._currSize += 1
+            _inventoryMakerProps._currSize += 1
 		end
 
 		_inventoryMakerProps._data = data
