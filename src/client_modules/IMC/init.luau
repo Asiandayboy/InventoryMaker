@@ -30,6 +30,8 @@
                 - IMC.BuildStaticContainer()
                 - IMC.DestroyStaticContainer()
         - [New Method]: IMC.AddItemAtIndex()
+        - [Changed]: You can now return a cleanup function for your hover prompt render funcs, which
+            get called when the hover prompt is closed.
         - [Changed]: OnToggledCallback accepts varargs, passed through IMC.ToggleInventory(), 
             IMC.ToggleOn(), and IMC.ToggleOff()
         - [Changed]: IMC.GetItem() now also returns the slotGui and filledGui
@@ -881,7 +883,7 @@ end
 local function closeAllHoverPrompts(containers: { [string]: IMContainer._Container }, screenGui: ScreenGui)
 	for i,container in pairs(containers) do
 		if not container._HOVER_INFO then continue end
-		IMContainer.HideHoverPrompt(IMContainer.GetHoverPromptSingleton((container::IMContainer._Container), screenGui))
+		IMContainer.HideHoverPrompt(container, IMContainer.GetHoverPromptSingleton(container, screenGui))
 	end
 end
 
@@ -1219,7 +1221,7 @@ local function openStaticContextMenu(props: _InventoryMakerProps, container: IMC
 
 			hoverInfo._RENDER_FUNC(item, hoverPrompt, itemPositionInfo)
 		else
-			IMContainer.HideHoverPrompt(hoverPrompt)
+			IMContainer.HideHoverPrompt(container, hoverPrompt)
 		end
 	end
 	local promptSize = hoverPrompt and hoverPrompt.AbsoluteSize or Vector2.zero
@@ -1322,7 +1324,7 @@ local function openStaticContextMenu(props: _InventoryMakerProps, container: IMC
 				closeContextMenuStack(props, 1)
 				setActiveSlot(props, nil)
 				if container._HOVER_INFO then
-					IMContainer.HideHoverPrompt(IMContainer.GetHoverPromptSingleton(container, props._PARENT_CONTAINER_SCREEN_GUI))
+					IMContainer.HideHoverPrompt(container, IMContainer.GetHoverPromptSingleton(container, props._PARENT_CONTAINER_SCREEN_GUI))
 				end
 			end
 		end
@@ -1437,7 +1439,7 @@ local function connectFilledSlotHoverEventsForStaticContainer(props: _InventoryM
     ]]
     local onClosedFunc = staticContainer._CALLBACKS._ON_CLOSED_FUNC
     staticContainer:DefineClose(function()
-        IMContainer.HideHoverPrompt(prompt)
+        IMContainer.HideHoverPrompt(staticContainer, prompt)
         if onClosedFunc then
             onClosedFunc(staticContainer._PARENT_CONTAINER)
         end
@@ -1480,7 +1482,7 @@ local function connectFilledSlotHoverEventsForStaticContainer(props: _InventoryM
 
             local item = staticContainer._data[containerIndex]
             if isItemActiveSlot(props::_InventoryMakerProps, item) then
-                IMContainer.HideHoverPrompt(prompt)		
+                IMContainer.HideHoverPrompt(staticContainer, prompt)		
                 setActiveSlot(props::_InventoryMakerProps, nil)
             end
 		end
@@ -1559,7 +1561,7 @@ local function connectFilledSlotHoverEvents(props: _InventoryMakerProps,
 
             local item = getItemFromFilledGui(filledGui)
             if isItemActiveSlot(props::_InventoryMakerProps, item) then
-                IMContainer.HideHoverPrompt(prompt)		
+                IMContainer.HideHoverPrompt(container, prompt)		
                 setActiveSlot(props::_InventoryMakerProps, nil)
             end
 		end
@@ -1668,7 +1670,7 @@ local function connectFilledGuiEvents(props: _InventoryMakerProps,
         local item = getItemFromFilledGui(filledGui)
 		setActiveSlot(props, item, filledGui, draggable)
 		if container._HOVER_INFO then
-			IMContainer.HideHoverPrompt(IMContainer.GetHoverPromptSingleton(container, screenGui))
+			IMContainer.HideHoverPrompt(container, IMContainer.GetHoverPromptSingleton(container, screenGui))
 		end
 
 		if props._USER_CONTEXT_MENUS then
@@ -2727,7 +2729,7 @@ function InventoryMaker.RemoveItem(slotIndex: number): boolean
 
 
     if isItemActiveSlot(_inventoryMakerProps::_InventoryMakerProps, _inventoryMakerProps._data[slotIndex]) then
-        IMContainer.HideHoverPrompt(IMContainer.GetHoverPromptSingleton(targetContainer, _inventoryMakerProps._PARENT_CONTAINER_SCREEN_GUI))
+        IMContainer.HideHoverPrompt(targetContainer, IMContainer.GetHoverPromptSingleton(targetContainer, _inventoryMakerProps._PARENT_CONTAINER_SCREEN_GUI))
         setActiveSlot(_inventoryMakerProps::_InventoryMakerProps, nil)
     end
     removeEquippedItem(_inventoryMakerProps::_InventoryMakerProps, _inventoryMakerProps._data[slotIndex]::ITEM_TYPE, targetContainer, slotIndex)

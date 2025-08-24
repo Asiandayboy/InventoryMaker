@@ -29,17 +29,18 @@ type HoverPromptConfigs = {
 	GuiTemplate: GuiObject,
 	FixedPosition: boolean,
 	Offset: Vector2,
-	RenderFunc: (item: any, hoverPromptGui: GuiObject, positionInfo: ItemPositionInfo) -> (),
+	RenderFunc: (item: any, hoverPromptGui: GuiObject, positionInfo: ItemPositionInfo) -> (() -> ())?,
 }
 
 type _HoverPromptInfo = {
 	_TEMPLATE: GuiObject,
 	_OFFSET: UDim2,
 	_FIXED_POSITION: boolean,
-	_RENDER_FUNC: (item: any, gui: GuiObject, positionInfo: ItemPositionInfo) -> (),
+	_RENDER_FUNC: (item: any, gui: GuiObject, positionInfo: ItemPositionInfo) -> (() -> ())?,
 	_GUI: GuiObject?,
 	_INSET: UDim2?,
 	_OPEN_HOVER_PROMPT_AFTER_DRAGGING: boolean,
+    _RENDER_FUNC_CLEANUP: (() -> ())?,
 }
 
 export type StaticContainer = {

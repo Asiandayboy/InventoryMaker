@@ -62,7 +62,7 @@ export type HoverPromptConfigs = {
 	GuiTemplate: GuiObject,
 	FixedPosition: boolean,
 	Offset: Vector2,
-	RenderFunc: (item: ITEM_TYPE, hoverPromptGui: GuiObject, positionInfo: ItemPositionInfo) -> (),
+	RenderFunc: (item: ITEM_TYPE, hoverPromptGui: GuiObject, positionInfo: ItemPositionInfo) -> (() -> ())?,
 	ShowPromptAfterDragging: boolean?,
 }
 
@@ -79,10 +79,11 @@ export type _HoverPromptInfo = {
 	_TEMPLATE: GuiObject,
 	_OFFSET: UDim2,
 	_FIXED_POSITION: boolean,
-	_RENDER_FUNC: (item: ITEM_TYPE, gui: GuiObject, positionInfo: ItemPositionInfo) -> (),
+	_RENDER_FUNC: (item: ITEM_TYPE, gui: GuiObject, positionInfo: ItemPositionInfo) -> (() -> ())?,
 	_GUI: GuiObject?,
 	_INSET: UDim2?,
 	_OPEN_HOVER_PROMPT_AFTER_DRAGGING: boolean,
+    _RENDER_FUNC_CLEANUP: (() -> ())?,
 }
 
 export type ActivatedCallback = (item: ITEM_TYPE, filledGui: GuiObject, slotIndex: number) -> ()
@@ -687,7 +688,7 @@ function IMContainer.GetHoverPromptSingleton(container: _Container | _StaticCont
 end
 
 function IMContainer.FixedHoverPrompt(container: _Container | _StaticContainer, prompt: GuiObject, item: ITEM_TYPE, filledGui: GuiObject, slotIndex: number, containerIndex: number)
-	local hoverInfo = container._HOVER_INFO
+	local hoverInfo = container._HOVER_INFO::_HoverPromptInfo?
 	if not hoverInfo then return end
 
     local itemPositionInfo: ItemPositionInfo = {
@@ -698,7 +699,8 @@ function IMContainer.FixedHoverPrompt(container: _Container | _StaticContainer, 
 	
 	prompt.Visible = true
 	if hoverInfo._RENDER_FUNC then
-		hoverInfo._RENDER_FUNC(item, prompt, itemPositionInfo)
+		local cleanppFunc = hoverInfo._RENDER_FUNC(item, prompt, itemPositionInfo)
+        hoverInfo._RENDER_FUNC_CLEANUP = cleanppFunc
 	end
 	
 	local pos = filledGui.AbsolutePosition
@@ -726,7 +728,7 @@ function IMContainer.FixedHoverPrompt(container: _Container | _StaticContainer, 
 end
 
 function IMContainer.NonFixedHoverPrompt(container: _Container | _StaticContainer, prompt: GuiObject, item: ITEM_TYPE, filledGui: GuiObject, mouse: Vector2, slotIndex: number, containerIndex: number)
-	local hoverInfo = container._HOVER_INFO
+	local hoverInfo = container._HOVER_INFO::_HoverPromptInfo?
 	if not hoverInfo then return end
 
     local itemPositionInfo: ItemPositionInfo = {
@@ -738,7 +740,8 @@ function IMContainer.NonFixedHoverPrompt(container: _Container | _StaticContaine
 	if not prompt.Visible then
 		prompt.Visible = true::any
 		if hoverInfo._RENDER_FUNC then
-			hoverInfo._RENDER_FUNC(item, prompt, itemPositionInfo)
+			local cleanupFunc = hoverInfo._RENDER_FUNC(item, prompt, itemPositionInfo)
+            hoverInfo._RENDER_FUNC_CLEANUP = cleanupFunc
 		end	
 	end
 	
@@ -770,9 +773,17 @@ function IMContainer.NonFixedHoverPrompt(container: _Container | _StaticContaine
 	end
 end
 
-function IMContainer.HideHoverPrompt(prompt: GuiObject?)
+function IMContainer.HideHoverPrompt(container: _Container | _StaticContainer, prompt: GuiObject?)
 	if not prompt then return end
 	prompt.Visible = false
+
+    local hoverInfo = container._HOVER_INFO::_HoverPromptInfo?
+    if not hoverInfo then return end
+
+    local hoverCleanupFunc = hoverInfo._RENDER_FUNC_CLEANUP
+    if hoverCleanupFunc then
+        hoverCleanupFunc()
+    end
 end
 
 function IMContainer.GetContainerIndexFromSlotIndex(container: _Container, slotIndex: number)
