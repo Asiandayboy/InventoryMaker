@@ -462,7 +462,8 @@ end
 local function getContainerFromSlotIndex(slotIndex: number, props: _InventoryMakerProps): IMContainer._Container?
 	local cIndicies = props._containersIndex
 	for i = 1, #cIndicies do
-		local container = props._containers[cIndicies[i]]
+        local containerName = cIndicies[i]
+		local container = props._containers[containerName]
 		if not (slotIndex >= container._invStartIndex and slotIndex <= container._invEndIndex) then continue end
 		return container
 	end
@@ -2711,22 +2712,11 @@ function InventoryMaker.RemoveItem(slotIndex: number): boolean
 	if _inventoryMakerProps._data == nil then error("No inventory data to remove from.") end
 	if not _inventoryMakerProps._data[slotIndex] then debugWarn("No item at that index to remove.") return false end
 	if _inventoryMakerProps._currSize == 0 then debugWarn("No items in inventory to remove.") return false end
-	
-
-    local targetContainer: IMContainer._Container
-    for i = 1, #_inventoryMakerProps._containersIndex do
-        local container = _inventoryMakerProps._containers[_inventoryMakerProps._containersIndex[i]]
-        if slotIndex >= container._invStartIndex and slotIndex <= container._invEndIndex then
-            targetContainer = container
-            break
-        end
+    
+    local targetContainer = getContainerFromSlotIndex(slotIndex, _inventoryMakerProps)
+    if not targetContainer or slotIndex <= 0 or slotIndex > _inventoryMakerProps._capacity then 
+        error("[IMC]: RemoveItem failed; slotIndex out of bounds")
     end
-
-    if not targetContainer then 
-        debugWarn("slotIndex out of bounds")
-        return false
-    end
-
 
     if isItemActiveSlot(_inventoryMakerProps::_InventoryMakerProps, _inventoryMakerProps._data[slotIndex]) then
         IMContainer.HideHoverPrompt(targetContainer, IMContainer.GetHoverPromptSingleton(targetContainer, _inventoryMakerProps._PARENT_CONTAINER_SCREEN_GUI))

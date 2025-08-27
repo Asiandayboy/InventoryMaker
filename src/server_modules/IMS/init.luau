@@ -5,15 +5,16 @@
 
 	Created by: robloxdestroyer1035
 	Version: v1.3.0
-	Last Updated: 8/23/25
+	Last Updated: 8/27/25
 
 	-----------------------------------------------------------------------------
 	InventoryMakerServer (IMS)
 	-----------------------------------------------------------------------------
-    v1.3.0 Update Log (8/23/25)
+    v1.3.0 Update Log (8/27/25)
+        - [New Callback]: OnRemove callback for IMS
         - [New Method]: Inventory:GetItem()
         - [New Method]: Inventory:AddItemAtIndex()
-        - [WIP - Fix]: Fixed Build Bug; Itemspace should be ignored; items needs to go
+        - [Fix]: Fixed Build Bug; Itemspace should be ignored; items needs to go
         where there were before instead of filling in the first empty slots
 
     v1.2.1 Update Log (6/8/25)
@@ -281,7 +282,7 @@ export type Inventory = {
         being added in the first empty slot, calling AddItem() again, but with 
         stackOnAdd set to false.
 	]]
-    AddItem: (self: Inventory, newItem: ITEM_TYPE, stackOnAdd: boolean?) -> boolean,
+    AddItem: (self: Inventory, newItem: ITEM_TYPE, stackOnAdd: boolean?, ...any) -> boolean,
 
     --[[
         Adds a new item at the specified slotIndex. Only containers in the itemspace
@@ -295,7 +296,7 @@ export type Inventory = {
         can be stacked onto the existing item based on the ValidateStackFunc. If it 
         does not pass the validation, the operation will fail and false will be returned.
     ]]
-    AddItemAtIndex: (self: Inventory, slotIndex: number, newItem: ITEM_TYPE, stackOnAdd: boolean?) -> boolean,
+    AddItemAtIndex: (self: Inventory, slotIndex: number, newItem: ITEM_TYPE, stackOnAdd: boolean?, ...any) -> boolean,
 
     --[[ 
 		Increases the capacity of the container by the amount, pushing all items after it to make
@@ -323,7 +324,7 @@ export type Inventory = {
         If the removed item was the equipped item, then the current equipped item will be
         set to nil.
 	]]
-    RemoveItem: (self: Inventory, slotIndex: number) -> (),
+    RemoveItem: (self: Inventory, slotIndex: number, ...any) -> (),
 
     --[[
 		Switches the item at slotIndex1 (item1) with the item at slotIndex2 (item2).
@@ -533,10 +534,11 @@ export type SwitchValidateFunc = (player: Player,
 export type Sorter = (item1: ITEM_TYPE, item2: ITEM_TYPE, ...any) -> boolean
 export type CapacityChangedCallback = (player: Player, containerName: string, amount: number) -> ()
 export type RemoteCallbacks = {
-	OnAdd: (player: Player, newItem: ITEM_TYPE, stackOnAdd: boolean) -> (),
+	OnAdd: (player: Player, newItem: ITEM_TYPE, stackOnAdd: boolean, ...any) -> (),
+    OnRemove: (player: Player, slotIndex: number, ...any) -> (),
 	OnIncreaseCap: CapacityChangedCallback?,
 	OnDecreaseCap: CapacityChangedCallback?,
-    OnAddAtIndex: ((player: Player, slotIndex: number, newItem: ITEM_TYPE, stackOnAdd: boolean) -> ())?
+    OnAddAtIndex: ((player: Player, slotIndex: number, newItem: ITEM_TYPE, stackOnAdd: boolean, ...any) -> ())?
 }
 
 
@@ -608,7 +610,7 @@ function Inventory.new(capacity: number, inventoryData: _DATA): Inventory
 		debugPrint("Inventory built; current size:", self._currSize)
 	end
 	
-	function props.AddItem(self: _Inventory, newItem: ITEM_TYPE, stackOnAdd: boolean?): boolean
+	function props.AddItem(self: _Inventory, newItem: ITEM_TYPE, stackOnAdd: boolean?, ...: any): boolean
 		if self._currSize >= self._capacity then debugWarn("Failed to add new item; inventory at full capacity.") return false end
 		
 		stackOnAdd = if stackOnAdd == nil then false else stackOnAdd
@@ -662,7 +664,7 @@ function Inventory.new(capacity: number, inventoryData: _DATA): Inventory
 						if canAutoEquip then self:SetEquippedItem(slotIndex) end
 					end
 					
-					if self._REMOTE_CALLBACKS then self._REMOTE_CALLBACKS.OnAdd(player, newItemClone, stackOnAdd) end
+					if self._REMOTE_CALLBACKS then self._REMOTE_CALLBACKS.OnAdd(player, newItemClone, stackOnAdd, ...) end
 					debugPrint(string.format("Stack on add:\n\tleftover: 0\n\tslotIndex: %d\n\tcurrent size: %d", slotIndex, self._currSize))
 					return true
 				end
@@ -675,10 +677,10 @@ function Inventory.new(capacity: number, inventoryData: _DATA): Inventory
 					if canAutoEquip then self:SetEquippedItem(slotIndex) end
 					
 					if leftoverStacking then
-						if self._REMOTE_CALLBACKS then self._REMOTE_CALLBACKS.OnAdd(player, newItemClone, stackOnAdd) end
+						if self._REMOTE_CALLBACKS then self._REMOTE_CALLBACKS.OnAdd(player, newItemClone, stackOnAdd, ...) end
 						debugPrint(string.format("Stack on add:\n\tleftover: %d\n\tslotIndex: %d\n\tcurrent size: %d", leftover, slotIndex, self._currSize))
 					else
-						if self._REMOTE_CALLBACKS then self._REMOTE_CALLBACKS.OnAdd(player, newItemClone, stackOnAdd) end
+						if self._REMOTE_CALLBACKS then self._REMOTE_CALLBACKS.OnAdd(player, newItemClone, stackOnAdd, ...) end
 						debugPrint("New item added; current size:", self._currSize)
 					end
 					
@@ -701,7 +703,7 @@ function Inventory.new(capacity: number, inventoryData: _DATA): Inventory
 		return false
 	end
 	
-    function props.AddItemAtIndex(self: _Inventory, slotIndex: number, newItem: ITEM_TYPE, stackOnAdd: boolean?): boolean
+    function props.AddItemAtIndex(self: _Inventory, slotIndex: number, newItem: ITEM_TYPE, stackOnAdd: boolean?, ...: any): boolean
 		if self._currSize >= self._capacity then debugWarn("Failed to add new item; inventory at full capacity.") return false end
 
         local targetContainer = getContainerFromSlotIndex(self._containers, slotIndex)
@@ -733,7 +735,7 @@ function Inventory.new(capacity: number, inventoryData: _DATA): Inventory
             if self._REMOTE_CALLBACKS then 
                 local onAddAtIndex = self._REMOTE_CALLBACKS.OnAddAtIndex
                 if onAddAtIndex then
-                    onAddAtIndex(player, slotIndex, deepCopyTable(newItem::Table)::ITEM_TYPE, stackOnAdd) 
+                    onAddAtIndex(player, slotIndex, deepCopyTable(newItem::Table)::ITEM_TYPE, stackOnAdd, ...) 
                 end
             end
 
@@ -783,7 +785,7 @@ function Inventory.new(capacity: number, inventoryData: _DATA): Inventory
                     if self._REMOTE_CALLBACKS then 
                         local onAddAtIndex = self._REMOTE_CALLBACKS.OnAddAtIndex
                         if onAddAtIndex then
-                            onAddAtIndex(player, slotIndex, newItemClone2, stackOnAdd) 
+                            onAddAtIndex(player, slotIndex, newItemClone2, stackOnAdd, ...) 
                         end
                     end
                 end
@@ -792,7 +794,7 @@ function Inventory.new(capacity: number, inventoryData: _DATA): Inventory
                 if self._REMOTE_CALLBACKS then 
                     local onAddAtIndex = self._REMOTE_CALLBACKS.OnAddAtIndex
                     if onAddAtIndex then
-                        onAddAtIndex(player, slotIndex, newItemClone, stackOnAdd) 
+                        onAddAtIndex(player, slotIndex, newItemClone, stackOnAdd, ...) 
                     end
                 end
                 debugPrint(string.format("New item added at slotIndex %d with stackOnAdd; current size: %d", slotIndex, self._currSize))
@@ -898,7 +900,7 @@ function Inventory.new(capacity: number, inventoryData: _DATA): Inventory
 		debugPrint(string.format("Container (%s) capacity decreased by %d:\n\tNew Capacity=%d", targetContainer._name, amount, self._capacity))
 	end
 	
-	function props.RemoveItem(self: _Inventory, slotIndex: number)
+	function props.RemoveItem(self: _Inventory, slotIndex: number, ...: any)
 		if not slotIndex or typeof(slotIndex) ~= "number" or slotIndex <= 0 or slotIndex > self._capacity then 
 			debugWarn("Cannot remove item; invalid slotIndex.")
 			return 
@@ -916,6 +918,12 @@ function Inventory.new(capacity: number, inventoryData: _DATA): Inventory
 		targetContainer._currSize -= 1
 		self._data[slotIndex] = EMPTY_SLOT
 		self._currSize -= 1
+
+        local remoteCallbacks = self._REMOTE_CALLBACKS
+        if remoteCallbacks then
+            remoteCallbacks.OnRemove(self._player, slotIndex, ...)
+        end
+
         debugPrint("Removed item at slotIndex:", slotIndex)
 	end
 	
@@ -1202,6 +1210,7 @@ function Inventory.new(capacity: number, inventoryData: _DATA): Inventory
 	
 	function props.DefineRemotesToClient(self: _Inventory, remoteCallbacks: RemoteCallbacks)
 		if not remoteCallbacks.OnAdd then throwError("OnAdd callback missing from remoteCallbacks.") end
+		if not remoteCallbacks.OnRemove then throwError("OnRemove callback missing from remoteCallbacks.") end
 		self._REMOTE_CALLBACKS = remoteCallbacks
 	end
 
