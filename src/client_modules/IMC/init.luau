@@ -7,12 +7,12 @@
 	
 	Created by: robloxdestroyer1035
 	Version: v1.3.0
-	Last Updated: 8/24/25
+	Last Updated: 8/27/25
 	
 	-----------------------------------------------------------------------------
 	InventoryMakerClient (IMC)
 	-----------------------------------------------------------------------------
-    v1.3.0 Update Log (8/24/25)
+    v1.3.0 Update Log (8/27/25)
         - [New Feature]: Static Containers; used to render and interact with static inventories. I made
             this primarily to easily render merchant NPCs' inventories that you can sell to and buy from.
             New Methods:
@@ -30,6 +30,7 @@
                 - IMC.BuildStaticContainer()
                 - IMC.DestroyStaticContainer()
         - [New Method]: IMC.AddItemAtIndex()
+        - [New Method]: IMC.SetEquippedItem()
         - [Changed]: You can now return a cleanup function for your hover prompt render funcs, which
             get called when the hover prompt is closed.
         - [Changed]: OnToggledCallback accepts varargs, passed through IMC.ToggleInventory(), 
@@ -3667,6 +3668,39 @@ function InventoryMaker.DefineOnToggledCallback(callback: OnToggledCallback)
     _inventoryMakerProps._CALLBACKS._ON_TOGGLED = callback
 end
 
+--[[
+    Equips the item at the slotIndex. 
+    - If there is no item at the slotIndex, this function will do nothing. 
+    - If the slotIndex is **nil**, the item that is currently equipped will be unequipped;
+    if no item is equipped, then this function will do nothing.
+    - If there is an item at the slotIndex, and it is already the equipped item, this
+    function will do nothing.
+]]
+function InventoryMaker.SetEquippedItem(slotIndex: number?)
+    local data = _inventoryMakerProps._data::DATA
+    
+    local equippedItem = _inventoryMakerProps._equippedItem
+    if slotIndex == nil then
+        if not equippedItem then return end
+        
+        local filledGui = equippedItem._filledGui
+        local equippedItemSlotIndex = getSlotIndexFromSlot(filledGui.Parent::GuiObject)::number
+        local targetContainer = getContainerFromSlotIndex(equippedItemSlotIndex, _inventoryMakerProps)::IMContainer._Container
+
+        setEquippedItem(_inventoryMakerProps, equippedItem._item, filledGui, targetContainer, false, false)
+    else
+        local item = data[slotIndex]
+        if not item then return end
+
+        -- do nothing if the item is already the equipped item
+        if equippedItem and equippedItem._item == item then return end
+
+        local targetContainer = getContainerFromSlotIndex(slotIndex, _inventoryMakerProps)::IMContainer._Container
+        local filledGui = IMContainer.GetFilledGuiFromIndex(targetContainer, slotIndex)
+
+        setEquippedItem(_inventoryMakerProps, item, filledGui, targetContainer, false, false)
+    end
+end
 
 -----------------------------------------------------------------------------------------
 -----------------------------------------------------------------------------------------
