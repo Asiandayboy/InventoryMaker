@@ -1947,31 +1947,35 @@ local function stackOnAddItem(
 	end
 
 
-	local leftoverContainer: IMContainer._Container
-	local leftoverIndex: number
+    -- find the nearest available container
+	local targetContainer: IMContainer._Container do
+        local indexedContainers = props._containersIndex
+        for c = 1, #indexedContainers do
+            local currContainer = props._containers[indexedContainers[c]]
+            if currContainer._currSize >= currContainer._capacity then continue end
+            if currContainer._inItemspace == false then continue end
+            targetContainer = currContainer
+            break
+        end
+	end
+    
+    
+	for i, item in props._data do
+        if item then continue end
+        if i < targetContainer._invStartIndex then continue end
+        if i > targetContainer._invEndIndex then continue end
 
-	for i, v in ipairs(props._data) do
-		if v then continue end
+        local targetLeftoverIndex: number = i
 
-		-- find the next available container with empty slots
-		local indexedContainers = props._containersIndex
-		for c = 1, #indexedContainers do
-			local container = props._containers[indexedContainers[c]]
-			if container._currSize >= container._capacity then continue end
-			leftoverContainer = container
-			leftoverIndex = i
-			break
-		end
-
-		IMContainer.AddItemAtIndex(leftoverContainer, leftoverIndex, newItem, 
+		IMContainer.AddItemAtIndex(targetContainer, targetLeftoverIndex, newItem, 
 			function(newFilledGui: GuiObject, newSlot: GuiObject, itemRef: ITEM_TYPE, cRef: IMContainer._Container, slotIndex: number, containerIndex: number)
 				connectFilledGuiEvents(props, newFilledGui, cRef)
 				updateFunc(leftover, targetItem, itemRef, targetFilledGui, newFilledGui)
-				props._data[leftoverIndex] = itemRef
+				props._data[targetLeftoverIndex] = itemRef
 				props._currSize += 1
 				
-				if not IMContainer.IsBitFlagEnabled(leftoverContainer._flags, InventoryMaker.NO_AUTO_EQUIP) then
-					setEquippedItem(props, itemRef, newFilledGui, leftoverContainer, true, false)
+				if not IMContainer.IsBitFlagEnabled(targetContainer._flags, InventoryMaker.NO_AUTO_EQUIP) then
+					setEquippedItem(props, itemRef, newFilledGui, targetContainer, true, false)
 				end
 
 				if cRef._name == IMConstants.CONTAINER_HOTBAR_NAME then
