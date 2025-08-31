@@ -5,17 +5,18 @@
 
 	Created by: robloxdestroyer1035
 	Version: v1.3.0
-	Last Updated: 8/27/25
+	Last Updated: 8/31/25
 
 	-----------------------------------------------------------------------------
 	InventoryMakerServer (IMS)
 	-----------------------------------------------------------------------------
-    v1.3.0 Update Log (8/27/25)
+    v1.3.0 Update Log (8/31/25)
         - [New Callback]: OnRemove callback for IMS
         - [New Method]: Inventory:GetItem()
         - [New Method]: Inventory:AddItemAtIndex()
         - [Fix]: Fixed Build Bug; Itemspace should be ignored; items needs to go
         where there were before instead of filling in the first empty slots
+        - [Fix]: Fix incorrect argument passed into IncreaseCapacity and DecreaseCapacity 
 
     v1.2.1 Update Log (6/8/25)
         - No updates for IMS
@@ -532,7 +533,7 @@ export type SwitchValidateFunc = (player: Player,
 	item1Info: ItemPositionInfo, item2Info: ItemPositionInfo
 ) -> boolean
 export type Sorter = (item1: ITEM_TYPE, item2: ITEM_TYPE, ...any) -> boolean
-export type CapacityChangedCallback = (player: Player, containerName: string, amount: number) -> ()
+export type CapacityChangedCallback = (player: Player, builtContainerIndex: number, amount: number) -> ()
 export type RemoteCallbacks = {
 	OnAdd: (player: Player, newItem: ITEM_TYPE, stackOnAdd: boolean, ...any) -> (),
     OnRemove: (player: Player, slotIndex: number, ...any) -> (),
@@ -829,7 +830,7 @@ function Inventory.new(capacity: number, inventoryData: _DATA): Inventory
 		targetContainer._capacity += amount
 
 		if self._REMOTE_CALLBACKS and self._REMOTE_CALLBACKS.OnIncreaseCap then
-			self._REMOTE_CALLBACKS.OnIncreaseCap(self._player::Player, targetContainer._name, amount)
+			self._REMOTE_CALLBACKS.OnIncreaseCap(self._player::Player, builtContainerIndex, amount)
 		end
 
 		debugPrint(string.format("Container (%s) capacity increased by %d.", targetContainer._name, amount))
@@ -895,7 +896,7 @@ function Inventory.new(capacity: number, inventoryData: _DATA): Inventory
 		
 		local decreaseCapCallback: CapacityChangedCallback? = 
 			(self._REMOTE_CALLBACKS and self._REMOTE_CALLBACKS.OnDecreaseCap) and self._REMOTE_CALLBACKS.OnDecreaseCap or nil
-		if decreaseCapCallback then decreaseCapCallback(self._player::Player, targetContainer._name, amount) end
+		if decreaseCapCallback then decreaseCapCallback(self._player::Player, builtContainerIndex, amount) end
 
 		debugPrint(string.format("Container (%s) capacity decreased by %d:\n\tNew Capacity=%d", targetContainer._name, amount, self._capacity))
 	end

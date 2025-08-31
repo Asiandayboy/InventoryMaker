@@ -7,12 +7,12 @@
 	
 	Created by: robloxdestroyer1035
 	Version: v1.3.0
-	Last Updated: 8/27/25
+	Last Updated: 8/31/25
 	
 	-----------------------------------------------------------------------------
 	InventoryMakerClient (IMC)
 	-----------------------------------------------------------------------------
-    v1.3.0 Update Log (8/27/25)
+    v1.3.0 Update Log (8/31/25)
         - [New Feature]: Static Containers; used to render and interact with static inventories. I made
             this primarily to easily render merchant NPCs' inventories that you can sell to and buy from.
             New Methods:
@@ -42,6 +42,8 @@
         - [Changed]: HoverPrompt Render now passes in ItemPositionInfo
         - [Fix]: Fixed some typechecking errors
         - [Fix]: Fix Itemspace bug during Build()
+        - [Fix]: Fix leftover stacked item not going into the correct empty slot
+        - [Fix]: Fix incorrect argument passed into IncreaseCapacity and DecreaseCapacity 
 
     v1.2.1 Update Log (6/8/25)
         - [Bug Fix]: Old gui objects was used when equipping a new item after switching across containers, resulting in a nil error
@@ -3269,12 +3271,13 @@ end
 	indices of those slots while maintaining it's relative position. In other words, the position of items 
 	will remain the same. It's just offset to make room for the new empty slots.
 ]]
-function InventoryMaker.IncreaseCapacity(targetContainerName: string, amount: number)
+function InventoryMaker.IncreaseCapacity(builtContainerIndex: number, amount: number)
 	if type(amount) ~= "number" then error("[InventoryMaker]: Amount must be a number.", 2) end
 	if amount <= 0 or amount % 1 ~= 0 then error("[InventoryMaker]: Amount must be a non-zero positive integer to increase container capacity.") end
 	if #_inventoryMakerProps._containersIndex == 0 then error("[InventoryMaker]: IncreaseCapacity() can only be called after the inventory is built.") end
 	if not _inventoryMakerProps._data then error("[InventoryMaker]: No data in inventory to increase capacity for.") end
 	
+    local targetContainerName = _inventoryMakerProps._containersIndex[builtContainerIndex]
 	local targetContainer = _inventoryMakerProps._containers[targetContainerName]
 	if not targetContainer then
 		error(string.format("[InventoryMaker]: targetContainer (%s) does not exist", targetContainerName))
@@ -3324,7 +3327,7 @@ function InventoryMaker.IncreaseCapacity(targetContainerName: string, amount: nu
 		_inventoryMakerProps._CALLBACKS._ON_SIZE_CHANGED(_inventoryMakerProps._currSize, _inventoryMakerProps._capacity)
 	end
 	
-	debugPrint(string.format("Container (%s) capacity increased by %d.", targetContainer._name, amount))
+	debugPrint(string.format("Container (%s) capacity increased by %d.", targetContainerName, amount))
 end
 
 --[[
@@ -3339,12 +3342,13 @@ end
 	If it did, that wouldn't make sense, since it would mean deleting items from the
 	inventory. 
 ]]
-function InventoryMaker.DecreaseCapacity(targetContainerName: string, amount: number)
+function InventoryMaker.DecreaseCapacity(builtContainerIndex: number, amount: number)
 	if type(amount) ~= "number" then error("[InventoryMaker]: Amount must be a number.", 2) end
 	if amount <= 0 or amount % 1 ~= 0 then error("[InventoryMaker]: Amount must be a non-zero positive integer to decrease container capacity.") end
 	if #_inventoryMakerProps._containersIndex == 0 then error("[InventoryMaker]: DecreaseCapacity() can only be called after the inventory is built.") end
 	if not _inventoryMakerProps._data then error("[InventoryMaker]: No data in inventory to decrease capacity for.") end
 	
+    local targetContainerName = _inventoryMakerProps._containersIndex[builtContainerIndex]
 	local targetContainer = _inventoryMakerProps._containers[targetContainerName]
 	if not targetContainer then
 		error(string.format("[InventoryMaker]: targetContainer (%s) does not exist", targetContainerName))
@@ -3423,7 +3427,7 @@ function InventoryMaker.DecreaseCapacity(targetContainerName: string, amount: nu
 		_inventoryMakerProps._CALLBACKS._ON_SIZE_CHANGED(_inventoryMakerProps._currSize, _inventoryMakerProps._capacity)
 	end
 	
-	debugPrint(string.format("Container (%s) capacity decreased by %d:\n\tNew Capacity=%d", targetContainer._name, amount, _inventoryMakerProps._capacity))
+	debugPrint(string.format("Container (%s) capacity decreased by %d:\n\tNew Capacity=%d", targetContainerName, amount, _inventoryMakerProps._capacity))
 end
 
 --[[
