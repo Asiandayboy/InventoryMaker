@@ -44,6 +44,7 @@
         - [Fix]: Fix Itemspace bug during Build()
         - [Fix]: Fix leftover stacked item not going into the correct empty slot
         - [Fix]: Fix incorrect argument passed into IncreaseCapacity and DecreaseCapacity 
+        - [Fix]: Fix Build() bug with tracking containers' and inventory sizes
 
     v1.2.1 Update Log (6/8/25)
         - [Bug Fix]: Old gui objects was used when equipping a new item after switching across containers, resulting in a nil error
@@ -2250,7 +2251,7 @@ end
 	of the inventory.
 	
 	If your array of items has gaps in it, those gaps will be marked with "false" to signify
-	empty slots.
+	empty slots. 
 ]]
 function InventoryMaker.Populate(populatorFunc: () -> (DATA, number))
 	local items, capacity = populatorFunc()
@@ -2260,21 +2261,7 @@ function InventoryMaker.Populate(populatorFunc: () -> (DATA, number))
 	end
 
 	_inventoryMakerProps._capacity = capacity
-
-	if InventoryMaker.USING_IMS then
-		--[[
-			With USING_IMS mode enabled, IMS will have structured the inventory items into its appropriate container.
-			So, all we need to do is let the client reference the copy that was sent over by the server.
-		]]
-		_inventoryMakerProps._data = items
-		for i = 1, capacity do
-			if not items[i] then continue end
-			_inventoryMakerProps._currSize += 1
-		end
-	else
-		-- if not USING_IMS, the inventory items will be properly structured when the inventory is built
-		_inventoryMakerProps._data = items
-	end
+    _inventoryMakerProps._data = items
 end
 
 --[[
@@ -2316,6 +2303,8 @@ function InventoryMaker.Build(containers: { IMContainer.Container }, itemspace: 
 	
 	local function onFilledSlotCreated(filledGui: GuiObject, slot: GuiObject, item: ITEM_TYPE, container: IMContainer._Container, slotIndex: number, cIndex: number)
 		connectFilledGuiEvents(_inventoryMakerProps, filledGui, container)
+
+        _inventoryMakerProps._currSize += 1
 		
 		if container._name == IMConstants.CONTAINER_HOTBAR_NAME then
 			bindHotbarKey(container, _inventoryMakerProps._data::DATA, slotIndex, cIndex)
@@ -2360,30 +2349,6 @@ function InventoryMaker.Build(containers: { IMContainer.Container }, itemspace: 
 		if itemspace == nil then container._inItemspace = true end
 
 		lastIndex = lastIndex::number + container._capacity
-	end
-	
-	
-	local currContainerIndex = 1
-	local currContainer = CONTAINERS[currContainerIndex]
-	if InventoryMaker.USING_IMS == false then
-		local items = _inventoryMakerProps._data
-		local data = table.create(_inventoryMakerProps._capacity, false)::DATA
-
-		for slotIndex = 1, invCapacity do
-			local item = items[slotIndex]
-			if not item then continue end
-
-			if currContainer._currSize >= currContainer._capacity then 
-				currContainerIndex += 1
-				currContainer = CONTAINERS[currContainerIndex]
-			end
-
-            data[slotIndex] = item
-            currContainer._currSize += 1
-            _inventoryMakerProps._currSize += 1
-		end
-
-		_inventoryMakerProps._data = data
 	end
 	
 	lastIndex = 1

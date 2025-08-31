@@ -17,6 +17,7 @@
         - [Fix]: Fixed Build Bug; Itemspace should be ignored; items needs to go
         where there were before instead of filling in the first empty slots
         - [Fix]: Fix incorrect argument passed into IncreaseCapacity and DecreaseCapacity 
+        - [Fix]: Fix Build() bug with tracking containers' sizes.
 
     v1.2.1 Update Log (6/8/25)
         - No updates for IMS
@@ -592,20 +593,21 @@ function Inventory.new(capacity: number, inventoryData: _DATA): Inventory
 		local currContainer = self._containers[currContainerIndex]
 		for slotIndex = 1, capacity do
 			local item = inventoryData[slotIndex]
-			if not item then continue end
 			
             --[[
                 items at added from index 1 to n, so it must follow the order the containers 
                 were arranged in. This means, it's easy to track which container we're on
             ]]
-			if currContainer._currSize >= currContainer._capacity then 
+			if slotIndex > currContainer._invEndIndex and currContainerIndex < #self._containers then 
 				currContainerIndex += 1
 				currContainer = self._containers[currContainerIndex]
 			end
 
-            self._data[slotIndex] = item
-            currContainer._currSize += 1
-            self._currSize += 1
+            if item then
+                self._data[slotIndex] = item
+                currContainer._currSize += 1
+                self._currSize += 1
+            end
 		end
 		
 		debugPrint("Inventory built; current size:", self._currSize)
@@ -1238,7 +1240,7 @@ function Inventory.new(capacity: number, inventoryData: _DATA): Inventory
     -- function props:PrintContainers()
 	-- 	for i = 1, #self._containers do
 	-- 		local container = self._containers[i]
-	-- 		warn(string.format("-----[%s]----", container._name))
+	-- 		warn(string.format("-----[%s: %d]----", container._name, container._currSize))
 	-- 		for j = container._invStartIndex, container._invEndIndex do
 	-- 			print(string.format("[%d] =", j), self._data[j])
 	-- 		end
