@@ -775,6 +775,7 @@ end
 
 function IMContainer.HideHoverPrompt(container: _Container | _StaticContainer, prompt: GuiObject?)
 	if not prompt then return end
+    if not prompt.Visible then return end
 	prompt.Visible = false
 
     local hoverInfo = container._HOVER_INFO::_HoverPromptInfo?
