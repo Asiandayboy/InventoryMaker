@@ -45,6 +45,7 @@
         - [Fix]: Fix leftover stacked item not going into the correct empty slot
         - [Fix]: Fix incorrect argument passed into IncreaseCapacity and DecreaseCapacity 
         - [Fix]: Fix Build() bug with tracking containers' and inventory sizes
+        - [Fix]: Fix bug on AddItem when HotbarFillFirst flag is enabled
 
     v1.2.1 Update Log (6/8/25)
         - [Bug Fix]: Old gui objects was used when equipping a new item after switching across containers, resulting in a nil error
@@ -2153,6 +2154,87 @@ local function toggle(props: _InventoryMakerProps): (boolean, boolean)
 	end
 end
 
+local function initNewItemAdded(filledGui: GuiObject, slot: GuiObject, item: ITEM_TYPE, c: IMContainer._Container, slotIndex: number, cIndex: number)
+    connectFilledGuiEvents(_inventoryMakerProps, filledGui, c)
+    
+    if not IMContainer.IsBitFlagEnabled(c._flags, InventoryMaker.NO_AUTO_EQUIP) then
+        setEquippedItem(_inventoryMakerProps, item, filledGui, c, false, false)
+    end
+    
+    if c._name == IMConstants.CONTAINER_HOTBAR_NAME then
+        bindHotbarKey(c, _inventoryMakerProps._data::DATA, slotIndex, cIndex)
+    end
+end
+
+--[[
+    The purpose of this function mainly serves for backwards compatibility. I'm not tryna
+    break ppl's data who use the HOTBAR_FILL_FIRST flag. I hope I didn't and do not...
+]]
+local function stackAddFillHotbarFirst(newItem: ITEM_TYPE): boolean
+    local stackOnAdd = true
+    local hotbarContainer = _inventoryMakerProps._containers[IMConstants.CONTAINER_HOTBAR_NAME]
+    local stackingConfigs = _inventoryMakerProps._STACKING_CONFIGS
+
+    local DATA = _inventoryMakerProps._data::DATA
+
+    for _, name in _inventoryMakerProps._containersIndex do
+		local currContainer = _inventoryMakerProps._containers[name]
+		if currContainer._currSize >= currContainer._capacity and not stackOnAdd then continue end
+		if currContainer._inItemspace == false then continue end
+        if currContainer == hotbarContainer then continue end
+		
+		if not (currContainer::IMContainer._Container):_isItemAllowed(newItem) then continue end
+		
+		for currSlotIndex = currContainer._invStartIndex, currContainer._invEndIndex do
+			local currSlotItem = DATA[currSlotIndex]
+			
+			if currSlotItem and stackOnAdd and stackingConfigs then
+				local canStack, leftover = stackingConfigs._STACK_VALIDATE(currSlotItem, newItem)
+				if not canStack then continue end
+				if not currContainer._stackingEnabled then 
+					debugPrint("Failed to add new item; stacking disabled on container; no stacking will occur.") 
+					return false 
+				end
+				
+				local targetSlot = currContainer._slotGuiObjs[IMContainer.GetContainerIndexFromSlotIndex(currContainer::IMContainer._Container, currSlotIndex)]::GuiObject
+				local targetIndex = getSlotIndexFromSlot(targetSlot)
+				if targetIndex ~= currSlotIndex then continue end
+
+				local ret = stackOnAddItem(
+					_inventoryMakerProps::_InventoryMakerProps, 
+					stackingConfigs._STACK_UPDATE, 
+					currContainer::IMContainer._Container, 
+					newItem, 
+					currSlotItem, 
+					currSlotIndex, 
+					leftover
+				)
+				if not ret then debugWarn("Failed to stack item on add; inventory at full capacity.") end
+				return ret
+			end
+			
+			-- adding item in empty slot
+			if not currSlotItem then
+				DATA[currSlotIndex] = newItem
+				_inventoryMakerProps._currSize += 1
+				IMContainer.AddItemAtIndex((currContainer::IMContainer._Container), currSlotIndex, newItem, initNewItemAdded)
+				if _inventoryMakerProps._CALLBACKS and _inventoryMakerProps._CALLBACKS._ON_SIZE_CHANGED then
+					_inventoryMakerProps._CALLBACKS._ON_SIZE_CHANGED(_inventoryMakerProps._currSize, _inventoryMakerProps._capacity)
+				end
+				debugPrint("New item added; current size:", _inventoryMakerProps._currSize)
+				return true
+			end
+		end
+	end
+
+    if _inventoryMakerProps._currSize == _inventoryMakerProps._capacity then
+        debugWarn("Failed to add new item; inventory at full capacity.")
+    else
+        debugWarn("Failed to add new item; no space available in itemspace.")
+    end
+
+    return false
+end
 
 
 -----------------------------------------------------------------------------------------
@@ -2476,36 +2558,23 @@ end
 function InventoryMaker.AddItem(newItem: ITEM_TYPE, stackOnAdd: boolean?): boolean
 	if not newItem then error("[InventoryMaker]: newItem is nil.", 2) end
 	if _inventoryMakerProps._data == nil then error("[InventoryMaker]: No inventory data to add to.") end
-	if _inventoryMakerProps._currSize == _inventoryMakerProps._capacity then 
+    if _inventoryMakerProps._currSize == _inventoryMakerProps._capacity and not stackOnAdd then 
 		debugWarn("Inventory at full capacity.") 
 		return false
 	end
 	
 	local stackingConfigs = _inventoryMakerProps._STACKING_CONFIGS
 	stackOnAdd = if stackOnAdd == nil then false else stackOnAdd
-	
-	local function callback(filledGui: GuiObject, slot: GuiObject, item: ITEM_TYPE, c: IMContainer._Container, slotIndex: number, cIndex: number)
-		connectFilledGuiEvents(_inventoryMakerProps, filledGui, c)
-		
-		if not IMContainer.IsBitFlagEnabled(c._flags, InventoryMaker.NO_AUTO_EQUIP) then
-			setEquippedItem(_inventoryMakerProps, item, filledGui, c, false, false)
-		end
-		
-		if c._name == IMConstants.CONTAINER_HOTBAR_NAME then
-			bindHotbarKey(c, _inventoryMakerProps._data::DATA, slotIndex, cIndex)
-		end
-	end
 
 	local hotbarContainer = _inventoryMakerProps._containers[IMConstants.CONTAINER_HOTBAR_NAME]
 	local fillHotbarFirst = false
-	if hotbarContainer and 
-		IMContainer.IsBitFlagEnabled(hotbarContainer._flags, InventoryMaker.HOTBAR_FILL_FIRST) and 
-		hotbarContainer._currSize < hotbarContainer._capacity then 
+    local fillHotbarFlag = IMContainer.IsBitFlagEnabled(hotbarContainer._flags, InventoryMaker.HOTBAR_FILL_FIRST)
+	if hotbarContainer and fillHotbarFlag and hotbarContainer._currSize <= hotbarContainer._capacity then 
 		fillHotbarFirst = true
 	end
 	
 	local itemspaceHitCount = 0
-	for _, name in ipairs(_inventoryMakerProps._containersIndex) do
+	for _, name in _inventoryMakerProps._containersIndex do
 		local currContainer = _inventoryMakerProps._containers[name]
 		if currContainer._currSize >= currContainer._capacity and not stackOnAdd then continue end
 		if currContainer._inItemspace == false then itemspaceHitCount += 1 continue end
@@ -2518,7 +2587,12 @@ function InventoryMaker.AddItem(newItem: ITEM_TYPE, stackOnAdd: boolean?): boole
 			
 			if currSlotItem and stackOnAdd and stackingConfigs then
 				local canStack, leftover = stackingConfigs._STACK_VALIDATE(currSlotItem, newItem)
-				if not canStack then continue end
+				if not canStack then 
+                    if currSlotIndex == currContainer._invEndIndex and fillHotbarFirst then
+                        return stackAddFillHotbarFirst(newItem)
+                    end
+                    continue 
+                end
 				if not currContainer._stackingEnabled then 
 					debugPrint("Failed to add new item; stacking disabled on container; no stacking will occur.") 
 					return false 
@@ -2527,7 +2601,6 @@ function InventoryMaker.AddItem(newItem: ITEM_TYPE, stackOnAdd: boolean?): boole
 				local targetSlot = currContainer._slotGuiObjs[IMContainer.GetContainerIndexFromSlotIndex(currContainer::IMContainer._Container, currSlotIndex)]::GuiObject
 				local targetIndex = getSlotIndexFromSlot(targetSlot)
 				if targetIndex ~= currSlotIndex then continue end
-				
 
 				local ret = stackOnAddItem(
 					_inventoryMakerProps::_InventoryMakerProps, 
@@ -2546,7 +2619,7 @@ function InventoryMaker.AddItem(newItem: ITEM_TYPE, stackOnAdd: boolean?): boole
 			if (not currSlotItem and fillHotbarFirst) or (not currSlotItem and not stackOnAdd) then
 				_inventoryMakerProps._data[currSlotIndex] = newItem
 				_inventoryMakerProps._currSize += 1
-				IMContainer.AddItemAtIndex((currContainer::IMContainer._Container), currSlotIndex, newItem, callback)
+				IMContainer.AddItemAtIndex((currContainer::IMContainer._Container), currSlotIndex, newItem, initNewItemAdded)
 				if _inventoryMakerProps._CALLBACKS and _inventoryMakerProps._CALLBACKS._ON_SIZE_CHANGED then
 					_inventoryMakerProps._CALLBACKS._ON_SIZE_CHANGED(_inventoryMakerProps._currSize, _inventoryMakerProps._capacity)
 				end

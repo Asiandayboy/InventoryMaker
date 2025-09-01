@@ -18,6 +18,7 @@
         where there were before instead of filling in the first empty slots
         - [Fix]: Fix incorrect argument passed into IncreaseCapacity and DecreaseCapacity 
         - [Fix]: Fix Build() bug with tracking containers' sizes.
+        - [Fix]: Fix bug on AddItem when HotbarFillFirst flag is enabled
 
     v1.2.1 Update Log (6/8/25)
         - No updates for IMS
@@ -543,6 +544,88 @@ export type RemoteCallbacks = {
     OnAddAtIndex: ((player: Player, slotIndex: number, newItem: ITEM_TYPE, stackOnAdd: boolean, ...any) -> ())?
 }
 
+--[[
+    The purpose of this function mainly serves for backwards compatibility. I'm not tryna
+    break ppl's data who use the HOTBAR_FILL_FIRST flag. I hope I didn't and do not...
+]]
+local function stackAddFillHotbarFirst(self: _Inventory, newItem: ITEM_TYPE, newItemClone: ITEM_TYPE, ...: any): boolean
+    local stackOnAdd = true
+    local hotbarContainer = self._hotbarIndex > 0 and self._containers[self._hotbarIndex] or nil
+    local stackingConfigs: StackingConfigs? = self._STACKING_CONFIGS
+    local player = self._player::Player
+
+    for i = 1, #self._containers do
+        local container: _Container = self._containers[i]
+        if container._currSize >= container._capacity and not stackOnAdd then continue end
+        if container._inItemspace == false then continue end
+        if container == hotbarContainer then continue end
+
+        if not (container::_Container):_IsItemAllowed(newItem) then continue end
+
+        local canAutoEquip = not isBitFlagEnabled(container._flags, IMS.NO_AUTO_EQUIP)
+        local leftoverStacking = false
+        local canStack = false
+        local leftover = 0
+        for slotIndex = container._invStartIndex, container._invEndIndex do
+            local currItem = self._data[slotIndex]
+
+            if currItem and stackOnAdd and stackingConfigs and not leftoverStacking then -- stack item
+                canStack, leftover = stackingConfigs.ValidateStackFunc(self._player, currItem, newItem)
+                if not canStack then continue end
+                if isBitFlagEnabled(container._flags, IMS.NO_STACKING) then
+                    debugPrint(string.format("Failed to add new item; stacking disabled on container %s; no stacking will occur.", container._name)) 
+                    return false 
+                end
+                
+                if leftover > 0 then
+                    stackingConfigs.UpdateStackFunc(self._player, leftover, currItem, newItem)
+                    leftoverStacking = true
+                    continue -- add newItem with leftover amount in the first empty slot in next iteration
+                end
+                
+                stackingConfigs.UpdateStackFunc(self._player, 0, currItem, newItem)
+                
+                local equippedItem = self:GetEquippedItem()
+                if equippedItem then
+                    local stackable = stackingConfigs.ValidateStackFunc(self._player, currItem, equippedItem)
+                    if not stackable and canAutoEquip then self:SetEquippedItem(slotIndex) end
+                else
+                    if canAutoEquip then self:SetEquippedItem(slotIndex) end
+                end
+                
+                if self._REMOTE_CALLBACKS then self._REMOTE_CALLBACKS.OnAdd(player, newItemClone, stackOnAdd, ...) end
+                debugPrint(string.format("Stack on add:\n\tleftover: 0\n\tslotIndex: %d\n\tcurrent size: %d", slotIndex, self._currSize))
+                return true
+            end
+            
+            if not currItem then -- add in first empty slot
+                self._data[slotIndex] = newItem
+                self._currSize += 1
+                container._currSize += 1
+                
+                if canAutoEquip then self:SetEquippedItem(slotIndex) end
+                
+                if leftoverStacking then
+                    if self._REMOTE_CALLBACKS then self._REMOTE_CALLBACKS.OnAdd(player, newItemClone, stackOnAdd, ...) end
+                    debugPrint(string.format("Stack on add:\n\tleftover: %d\n\tslotIndex: %d\n\tcurrent size: %d", leftover, slotIndex, self._currSize))
+                else
+                    if self._REMOTE_CALLBACKS then self._REMOTE_CALLBACKS.OnAdd(player, newItemClone, stackOnAdd, ...) end
+                    debugPrint("New item added; current size:", self._currSize)
+                end
+                
+                return true
+            end
+        end
+    end
+
+    if self._currSize >= self._capacity then
+        debugWarn("Failed to add new item; inventory at full capacity.")
+    else
+        debugWarn("Failed to add new item; no space available in itemspace.")
+    end
+
+    return false
+end
 
 function Inventory.new(capacity: number, inventoryData: _DATA): Inventory
 	local props = {
@@ -614,7 +697,7 @@ function Inventory.new(capacity: number, inventoryData: _DATA): Inventory
 	end
 	
 	function props.AddItem(self: _Inventory, newItem: ITEM_TYPE, stackOnAdd: boolean?, ...: any): boolean
-		if self._currSize >= self._capacity then debugWarn("Failed to add new item; inventory at full capacity.") return false end
+        if self._currSize >= self._capacity and not stackOnAdd then debugWarn("Failed to add new item; inventory at full capacity.") return false end
 		
 		stackOnAdd = if stackOnAdd == nil then false else stackOnAdd
 		local stackingConfigs: StackingConfigs? = self._STACKING_CONFIGS
@@ -622,7 +705,7 @@ function Inventory.new(capacity: number, inventoryData: _DATA): Inventory
 		
 		local fillHotbarFirst = false
 		local hotbarContainer = self._hotbarIndex > 0 and self._containers[self._hotbarIndex] or nil
-		if hotbarContainer and isBitFlagEnabled(hotbarContainer._flags, IMS.HOTBAR_FILL_FIRST) and hotbarContainer._currSize < hotbarContainer._capacity then
+		if hotbarContainer and isBitFlagEnabled(hotbarContainer._flags, IMS.HOTBAR_FILL_FIRST) and hotbarContainer._currSize <= hotbarContainer._capacity then
 			fillHotbarFirst = true
 		end
 		
@@ -635,7 +718,7 @@ function Inventory.new(capacity: number, inventoryData: _DATA): Inventory
 			if fillHotbarFirst and container ~= hotbarContainer then continue end
 			
 			if not (container::_Container):_IsItemAllowed(newItem) then continue end
-			
+
 			local canAutoEquip = not isBitFlagEnabled(container._flags, IMS.NO_AUTO_EQUIP)
 			local leftoverStacking = false
 			local canStack = false
@@ -645,7 +728,12 @@ function Inventory.new(capacity: number, inventoryData: _DATA): Inventory
 
 				if currItem and stackOnAdd and stackingConfigs and not leftoverStacking then -- stack item
 					canStack, leftover = stackingConfigs.ValidateStackFunc(self._player, currItem, newItem)
-					if not canStack then continue end
+					if not canStack then 
+                        if slotIndex == container._invEndIndex and fillHotbarFirst then
+                            return stackAddFillHotbarFirst(self, newItem, newItemClone, ...)
+                        end
+                        continue 
+                    end
 					if isBitFlagEnabled(container._flags, IMS.NO_STACKING) then
 						debugPrint(string.format("Failed to add new item; stacking disabled on container %s; no stacking will occur.", container._name)) 
 						return false 
@@ -1237,15 +1325,15 @@ function Inventory.new(capacity: number, inventoryData: _DATA): Inventory
 		table.clear(self::Table)
 	end
 
-    -- function props:PrintContainers()
-	-- 	for i = 1, #self._containers do
-	-- 		local container = self._containers[i]
-	-- 		warn(string.format("-----[%s: %d]----", container._name, container._currSize))
-	-- 		for j = container._invStartIndex, container._invEndIndex do
-	-- 			print(string.format("[%d] =", j), self._data[j])
-	-- 		end
-	-- 	end
-	-- end
+    function props:PrintContainers()
+		for i = 1, #self._containers do
+			local container = self._containers[i]
+			warn(string.format("-----[%s: %d]----", container._name, container._currSize))
+			for j = container._invStartIndex, container._invEndIndex do
+				print(string.format("[%d] =", j), self._data[j])
+			end
+		end
+	end
 	
 	return props::Inventory
 end
