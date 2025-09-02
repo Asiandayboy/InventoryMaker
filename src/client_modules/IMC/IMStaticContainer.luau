@@ -28,7 +28,7 @@ type GridLayoutParams = {
 type HoverPromptConfigs = {
 	GuiTemplate: GuiObject,
 	FixedPosition: boolean,
-	Offset: Vector2,
+	Offset: Vector2?,
 	RenderFunc: (item: any, hoverPromptGui: GuiObject, positionInfo: ItemPositionInfo) -> (() -> ())?,
 }
 
