@@ -7,12 +7,12 @@
 	
 	Created by: robloxdestroyer1035
 	Version: v1.3.0
-	Last Updated: 8/31/25
+	Last Updated: 9/2/25
 	
 	-----------------------------------------------------------------------------
 	InventoryMakerClient (IMC)
 	-----------------------------------------------------------------------------
-    v1.3.0 Update Log (8/31/25)
+    v1.3.0 Update Log (9/2/25)
         - [New Feature]: Static Containers; used to render and interact with static inventories. I made
             this primarily to easily render merchant NPCs' inventories that you can sell to and buy from.
             New Methods:

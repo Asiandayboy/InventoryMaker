@@ -5,12 +5,12 @@
 
 	Created by: robloxdestroyer1035
 	Version: v1.3.0
-	Last Updated: 8/31/25
+	Last Updated: 9/2/25
 
 	-----------------------------------------------------------------------------
 	InventoryMakerServer (IMS)
 	-----------------------------------------------------------------------------
-    v1.3.0 Update Log (8/31/25)
+    v1.3.0 Update Log (9/2/25)
         - [New Callback]: OnRemove callback for IMS
         - [New Method]: Inventory:GetItem()
         - [New Method]: Inventory:AddItemAtIndex()
@@ -450,8 +450,15 @@ export type Inventory = {
 		used to allow the developer to fire their remotes to the client so that the client can update their inventory.
 		
 		OnAdd: A callback that gets run when a new item is successfully added.
-        - param1 [ITEM_TYPE]: newItem - the new item added
-        - param2 [boolean]: stackOnAdd - a boolean that determines whether or not the new item is to be stacked
+        - param1 [Player]: player - the player the inventory belongs to
+        - param2 [ITEM_TYPE]: newItem - the new item added
+        - param3 [boolean]: stackOnAdd - a boolean that determines whether or not the new item is to be stacked
+        - param4 [...any]: varargs - optional arguments passed from Inventory:AddItem()
+
+        OnRemove: A callback that gets run when an item is successfully removed.
+        - param1 [Player]: player - the player the inventory belongs to
+        - param2 [number]: slotIndex - the position of the item to be removed
+        - param3 [...any]: varargs - optional arguments passed from Inventory:RemoveItem()
 		
 		OnIncreaseCap: An optional callback that gets run when a container has its capacity increased.
         - param1 [Player]: player - the player the inventory belongs to
@@ -462,6 +469,13 @@ export type Inventory = {
         - param1 [Player]: player - the player the inventory belongs to
         - param2 [string]: containerName - the name of the container whose capacity was decrease
         - param3 [number]: amount - the decrease amount
+
+        OnAddAtIndex: An optional callback that gets run when an item is successfully added with Inventory:AddItemAtIndex()
+        - param1 [Player]: player - the player the inventory belongs to
+        - param2 [number]: slotIndex - the position to add the new item in
+        - param2 [ITEM_TYPE]: newItem - the new item
+        - param2 [boolean]: stackOnAdd - a boolean that deterines whether or not the new item is to be stacked
+        - param3 [...any]: varargs - optional arguments passed from Inventory:AddItemAtIndex()
 	]]
     DefineRemotesToClient: (self: Inventory, remoteCallbacks: RemoteCallbacks) -> (),
 
