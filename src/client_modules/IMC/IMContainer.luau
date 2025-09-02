@@ -61,7 +61,7 @@ export type FilledConfigs = {
 export type HoverPromptConfigs = {
 	GuiTemplate: GuiObject,
 	FixedPosition: boolean,
-	Offset: Vector2,
+	Offset: Vector2?,
 	RenderFunc: (item: ITEM_TYPE, hoverPromptGui: GuiObject, positionInfo: ItemPositionInfo) -> (() -> ())?,
 	ShowPromptAfterDragging: boolean?,
 }
