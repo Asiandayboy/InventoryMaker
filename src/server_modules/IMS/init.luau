@@ -5,15 +5,16 @@
 
 	Created by: robloxdestroyer1035
 	Version: v1.3.0
-	Last Updated: 9/2/25
+	Last Updated: 9/29/25
 
 	-----------------------------------------------------------------------------
 	InventoryMakerServer (IMS)
 	-----------------------------------------------------------------------------
-    v1.3.0 Update Log (9/2/25)
+    v1.3.0 Update Log (9/29/25)
         - [New Callback]: OnRemove callback for IMS
         - [New Method]: Inventory:GetItem()
         - [New Method]: Inventory:AddItemAtIndex()
+        - [Changed]: Exported DATA type, which represents the type of the underlying inventory data array
         - [Fix]: Fixed Build Bug; Itemspace should be ignored; items needs to go
         where there were before instead of filling in the first empty slots
         - [Fix]: Fix incorrect argument passed into IncreaseCapacity and DecreaseCapacity 
@@ -242,7 +243,7 @@ end
 ----------------------------------------------------------------------------------
 
 local Inventory = {}
-type _DATA = { ITEM_TYPE | false }
+export type DATA = { ITEM_TYPE | false }
 export type Inventory = {
     --[[
         A user-defiend table to store any additional info
@@ -364,7 +365,7 @@ export type Inventory = {
     --[[ 
         Returns the reference to the underlying inventory data array 
     ]]
-    Items: (self: Inventory) -> _DATA,
+    Items: (self: Inventory) -> DATA,
 
     --[[
         Returns the reference to the item at the slotIndex or false if it's an empty slot.
@@ -516,7 +517,7 @@ export type Inventory = {
 type _Inventory = {
     _containers: { _Container },
     _hotbarIndex: number,
-    _data: _DATA,
+    _data: DATA,
     _currSize: number,
     _capacity: number,
     _STACKING_CONFIGS: StackingConfigs?,
@@ -641,9 +642,9 @@ local function stackAddFillHotbarFirst(self: _Inventory, newItem: ITEM_TYPE, new
     return false
 end
 
-function Inventory.new(capacity: number, inventoryData: _DATA): Inventory
+function Inventory.new(capacity: number, inventoryData: DATA): Inventory
 	local props = {
-        _data = table.create(capacity, EMPTY_SLOT)::_DATA,
+        _data = table.create(capacity, EMPTY_SLOT)::DATA,
 		_capacity = capacity,
 		_containers = {}::{ _Container },	-- stores the containers in the order in which they were built
 		_currSize = 0,
@@ -917,7 +918,7 @@ function Inventory.new(capacity: number, inventoryData: _DATA): Inventory
 		if not amount or typeof(amount) ~= "number" or amount <= 0 then debugWarn("Cannot increase capacity; invalid amount.") return end
 
 		local targetContainer = self._containers[builtContainerIndex]
-		local newData = table.create(self._capacity + amount, false)::_DATA
+		local newData = table.create(self._capacity + amount, false)::DATA
 		table.move(self._data, 1, targetContainer._invEndIndex, 1, newData)
 		table.move(self._data, targetContainer._invEndIndex+1, self._capacity, targetContainer._invEndIndex+1+amount, newData)
 
@@ -966,7 +967,7 @@ function Inventory.new(capacity: number, inventoryData: _DATA): Inventory
 		
 		-- collapse the targetContainer's capacity by the specified amount, pushing its items to the front
 		local newContainerCapacity = targetContainer._capacity - amount
-		local newContainerData = table.create(newContainerCapacity, false)::_DATA
+		local newContainerData = table.create(newContainerCapacity, false)::DATA
 		local amountLeft = amount
 		local containerIndex = 1
 		for i = targetContainer._invStartIndex, targetContainer._invEndIndex do
@@ -981,7 +982,7 @@ function Inventory.new(capacity: number, inventoryData: _DATA): Inventory
 		end
 		
 		-- copy over data to smaller array 
-		local newData = table.create(self._capacity - amount, false)::_DATA
+		local newData = table.create(self._capacity - amount, false)::DATA
 		table.move(self._data, 1, targetContainer._invStartIndex-1, 1, newData)
 		table.move(newContainerData, 1, newContainerCapacity, targetContainer._invStartIndex, newData)
 		table.move(self._data, targetContainer._invEndIndex+1, self._capacity, targetContainer._invEndIndex+1-amount, newData)
@@ -1263,8 +1264,8 @@ function Inventory.new(capacity: number, inventoryData: _DATA): Inventory
             if isBitFlagEnabled(container._flags, IMS.NO_SORTING) then continue end
             if container._currSize <= 0 then continue end -- don't need to sort containers that have no items
             
-            local tempSubarr = table.move(data, container._invStartIndex, container._invEndIndex, 1, {})
-            table.sort(tempSubarr, function(a: ITEM_TYPE?, b: ITEM_TYPE?)
+            local tempSubarr = table.move(data, container._invStartIndex, container._invEndIndex, 1, {}::DATA)
+            table.sort(tempSubarr, function(a: ITEM_TYPE | false, b: ITEM_TYPE | false)
                 if not a then return false end
                 if not b then return true end
                 return sort(a, b, varargs)
@@ -1285,7 +1286,7 @@ function Inventory.new(capacity: number, inventoryData: _DATA): Inventory
 		return self._equippedItem
 	end
 	
-	function props.Items(self: _Inventory): _DATA
+	function props.Items(self: _Inventory): DATA
 		return self._data
 	end
 
@@ -1339,15 +1340,15 @@ function Inventory.new(capacity: number, inventoryData: _DATA): Inventory
 		table.clear(self::Table)
 	end
 
-    function props:PrintContainers()
-		for i = 1, #self._containers do
-			local container = self._containers[i]
-			warn(string.format("-----[%s: %d]----", container._name, container._currSize))
-			for j = container._invStartIndex, container._invEndIndex do
-				print(string.format("[%d] =", j), self._data[j])
-			end
-		end
-	end
+    -- function props:PrintContainers()
+	-- 	for i = 1, #self._containers do
+	-- 		local container = self._containers[i]
+	-- 		warn(string.format("-----[%s: %d]----", container._name, container._currSize))
+	-- 		for j = container._invStartIndex, container._invEndIndex do
+	-- 			print(string.format("[%d] =", j), self._data[j])
+	-- 		end
+	-- 	end
+	-- end
 	
 	return props::Inventory
 end
@@ -1363,7 +1364,7 @@ end
 --[[
 	Creates a new inventory given the capacity and inventory data
 ]]
-function IMS.Inventory(capacity: number, data: _DATA): Inventory
+function IMS.Inventory(capacity: number, data: DATA): Inventory
 	return Inventory.new(capacity, data)
 end
 
