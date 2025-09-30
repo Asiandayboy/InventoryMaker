@@ -49,6 +49,7 @@
         - [Fix]: Fix bug when populating inventory with data; wrote in comments to enforce contiguous array
         - [Fix]: Fix bug stackOnAdd = false and HOTBAR_FILL_FIRST is enabled resulting in max iterations error
         - [Fix]: Fix mouse position with gui inset calculation for splitting
+        - [Fix]: Fix keybinds referencing stale data when container capacity increases/decreases
 
     v1.2.1 Update Log (6/8/25)
         - [Bug Fix]: Old gui objects was used when equipping a new item after switching across containers, resulting in a nil error
@@ -3395,7 +3396,9 @@ function InventoryMaker.IncreaseCapacity(builtContainerIndex: number, amount: nu
 			local oldSlotIndex = getSlotIndexFromSlot(slot)::number
 			local newSlotIndex = oldSlotIndex + amount
 
+            unbindHotbarKey(c, oldSlotIndex)
 			IMContainer.UpdateSlotIndexOfSlot(c, oldSlotIndex, newSlotIndex)
+            bindHotbarKey(c, newData, newSlotIndex, i)
 		end
 
 		c._invStartIndex += amount
@@ -3494,7 +3497,9 @@ function InventoryMaker.DecreaseCapacity(builtContainerIndex: number, amount: nu
 			local oldSlotIndex = getSlotIndexFromSlot(slot)::number
 			local newSlotIndex = oldSlotIndex - amount
 			
+            unbindHotbarKey(c, oldSlotIndex)
 			IMContainer.UpdateSlotIndexOfSlot(c, oldSlotIndex, newSlotIndex)
+            bindHotbarKey(c, newData, newSlotIndex, i)
 		end
 
 		c._invEndIndex -= amount
