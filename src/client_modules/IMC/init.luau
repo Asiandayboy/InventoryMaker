@@ -7,12 +7,12 @@
 	
 	Created by: robloxdestroyer1035
 	Version: v1.3.0
-	Last Updated: 9/2/25
+	Last Updated: 9/29/25
 	
 	-----------------------------------------------------------------------------
 	InventoryMakerClient (IMC)
 	-----------------------------------------------------------------------------
-    v1.3.0 Update Log (9/2/25)
+    v1.3.0 Update Log (9/29/25)
         - [New Feature]: Static Containers; used to render and interact with static inventories. I made
             this primarily to easily render merchant NPCs' inventories that you can sell to and buy from.
             New Methods:
@@ -46,6 +46,9 @@
         - [Fix]: Fix incorrect argument passed into IncreaseCapacity and DecreaseCapacity 
         - [Fix]: Fix Build() bug with tracking containers' and inventory sizes
         - [Fix]: Fix bug on AddItem when HotbarFillFirst flag is enabled
+        - [Fix]: Fix bug when populating inventory with data; wrote in comments to enforce contiguous array
+        - [Fix]: Fix bug stackOnAdd = false and HOTBAR_FILL_FIRST is enabled resulting in max iterations error
+        - [Fix]: Fix mouse position with gui inset calculation for splitting
 
     v1.2.1 Update Log (6/8/25)
         - [Bug Fix]: Old gui objects was used when equipping a new item after switching across containers, resulting in a nil error
@@ -2004,14 +2007,16 @@ local function enableSplitting(props: _InventoryMakerProps): RBXScriptConnection
 	local configs = props._STACKING_CONFIGS
 	if not configs then return nil end
 	
-	local inset = IMUtility.GetGuiInsetY(props._PARENT_CONTAINER_SCREEN_GUI.IgnoreGuiInset)
+    -- dealing with guiinset is so annoying, oh my god
+	-- local inset = IMUtility.GetGuiInsetY(props._PARENT_CONTAINER_SCREEN_GUI.IgnoreGuiInset)
+    local inset = IMUtility.GetGuiInsetY(true)
 	
 	local function getFilledGuis(): { GuiObject }
 		local allguis = {}
 		for i,v in pairs(props._containers) do
 			for j,f in pairs(v._slotGuiObjs) do
 				if not f then continue end
-				local filledGui = f:FindFirstChild(IMConstants.FILLED_GUI_NAME)
+				local filledGui = f:FindFirstChild(IMConstants.FILLED_GUI_NAME)::GuiObject?
 				if filledGui then
 					table.insert(allguis, filledGui)
 				end
@@ -2322,7 +2327,7 @@ end
 	NOTE: This module uses <strong>false</strong> to fill in unoccupied slots. This is how
 	empty slots are marked.
 	
-	A method used to populate the inventory with user data.
+	The method used to populate the inventory with user data.
 	Takes in 2 arguments: the inventory object and a populatorFunc callback.
 	- The inventory object is self-explanatory.
 	- The callback is used to fetch your inventory data and should return that data
@@ -2332,8 +2337,37 @@ end
 	The callback should return two values: the items in the inventory and a max capacity
 	of the inventory.
 	
-	If your array of items has gaps in it, those gaps will be marked with "false" to signify
-	empty slots. 
+    The array of items returned in the populatorFunc must not have gaps; it must be
+    contiguous. For example, if your array only has two items that are spaced apart from
+    each other, the elements in between must be marked as false.
+
+        -- Allowed:
+        local items = {
+            { Name = "Item1" },
+            false,
+            false,
+            false,
+            false,
+            false,
+            { Name = "Item2" },
+        }
+
+        -- Allowed:
+        local items = {
+            [1] = { Name = "Item1" },
+            [2] = false,
+            [3] = false,
+            [4] = false,
+            [5] = false,
+            [6] = false,
+            [7] = { Name = "Item2" },
+        }
+
+        -- Not Allowed:
+        local items = {
+            [1] = { Name = "Item1" },
+            [7] = { Name = "Item2" },
+        }
 ]]
 function InventoryMaker.Populate(populatorFunc: () -> (DATA, number))
 	local items, capacity = populatorFunc()
@@ -2343,7 +2377,15 @@ function InventoryMaker.Populate(populatorFunc: () -> (DATA, number))
 	end
 
 	_inventoryMakerProps._capacity = capacity
-    _inventoryMakerProps._data = items
+
+    local data = table.create(capacity, false)::DATA
+    for i = 1, capacity do
+        local item = items[i]
+        if item then
+            data[i] = item
+        end
+    end
+    _inventoryMakerProps._data = data
 end
 
 --[[
@@ -2566,12 +2608,15 @@ function InventoryMaker.AddItem(newItem: ITEM_TYPE, stackOnAdd: boolean?): boole
 	local stackingConfigs = _inventoryMakerProps._STACKING_CONFIGS
 	stackOnAdd = if stackOnAdd == nil then false else stackOnAdd
 
-	local hotbarContainer = _inventoryMakerProps._containers[IMConstants.CONTAINER_HOTBAR_NAME]
-	local fillHotbarFirst = false
-    local fillHotbarFlag = IMContainer.IsBitFlagEnabled(hotbarContainer._flags, InventoryMaker.HOTBAR_FILL_FIRST)
-	if hotbarContainer and fillHotbarFlag and hotbarContainer._currSize <= hotbarContainer._capacity then 
-		fillHotbarFirst = true
-	end
+    local fillHotbarFirst = false
+	local hotbarContainer = _inventoryMakerProps._containers[IMConstants.CONTAINER_HOTBAR_NAME] or nil
+    if hotbarContainer then
+        local fillHotbarFirstFlag = IMContainer.IsBitFlagEnabled(hotbarContainer._flags, InventoryMaker.HOTBAR_FILL_FIRST)
+        
+        if fillHotbarFirstFlag and hotbarContainer._currSize < hotbarContainer._capacity then 
+            fillHotbarFirst = true
+        end
+    end
 	
 	local itemspaceHitCount = 0
 	for _, name in _inventoryMakerProps._containersIndex do
@@ -3572,9 +3617,9 @@ function InventoryMaker.Sort(sorterName: string, ...: any)
 		if container._currSize <= 0 then continue end -- don't need to sort containers that have no items
         local isHotbarContainer = container._name == IMConstants.CONTAINER_HOTBAR_NAME
 		
-		local tempSubarr = table.move(data, container._invStartIndex, container._invEndIndex, 1, {})
+		local tempSubarr = table.move(data, container._invStartIndex, container._invEndIndex, 1, {}::DATA)
 
-		table.sort(tempSubarr, function(a: ITEM_TYPE?, b: ITEM_TYPE?)
+		table.sort(tempSubarr, function(a: ITEM_TYPE | false, b: ITEM_TYPE | false)
 			if not a then return false end
 			if not b then return true end
 			return sort(a, b, varargs)
