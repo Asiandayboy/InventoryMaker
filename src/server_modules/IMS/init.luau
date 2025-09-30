@@ -20,6 +20,7 @@
         - [Fix]: Fix incorrect argument passed into IncreaseCapacity and DecreaseCapacity 
         - [Fix]: Fix Build() bug with tracking containers' sizes.
         - [Fix]: Fix bug on AddItem when HotbarFillFirst flag is enabled
+        - [Fix]: Fix bug stackOnAdd = false and HOTBAR_FILL_FIRST is enabled resulting in max iterations error
 
     v1.2.1 Update Log (6/8/25)
         - No updates for IMS
@@ -720,9 +721,13 @@ function Inventory.new(capacity: number, inventoryData: DATA): Inventory
 		
 		local fillHotbarFirst = false
 		local hotbarContainer = self._hotbarIndex > 0 and self._containers[self._hotbarIndex] or nil
-		if hotbarContainer and isBitFlagEnabled(hotbarContainer._flags, IMS.HOTBAR_FILL_FIRST) and hotbarContainer._currSize <= hotbarContainer._capacity then
-			fillHotbarFirst = true
-		end
+        if hotbarContainer then
+            local hotbarFillFirstFlag = isBitFlagEnabled(hotbarContainer._flags, IMS.HOTBAR_FILL_FIRST)
+            
+            if hotbarFillFirstFlag and hotbarContainer._currSize < hotbarContainer._capacity then
+                fillHotbarFirst = true
+            end
+        end
 		
 		local newItemClone = deepCopyTable(newItem::Table)::ITEM_TYPE
 		local itemspaceHitCount = 0
@@ -774,7 +779,7 @@ function Inventory.new(capacity: number, inventoryData: DATA): Inventory
 					debugPrint(string.format("Stack on add:\n\tleftover: 0\n\tslotIndex: %d\n\tcurrent size: %d", slotIndex, self._currSize))
 					return true
 				end
-				
+
 				if (not currItem and fillHotbarFirst) or (not currItem and not stackOnAdd) then -- add in first empty slot
 					self._data[slotIndex] = newItem
 					self._currSize += 1
@@ -793,7 +798,7 @@ function Inventory.new(capacity: number, inventoryData: DATA): Inventory
 					return true
 				end
 			end
-		end
+        end
 
         if stackOnAdd then
             -- failed to find stack to stack new item onto; create a new one instead
@@ -805,7 +810,7 @@ function Inventory.new(capacity: number, inventoryData: DATA): Inventory
 			return false
 		end
 		
-		debugWarn("(Internal): Failed to add new item; max iterations")
+		debugWarn("(Internal): Failed to add new item; max iterations; report to me how this error occured plz")
 		return false
 	end
 	
