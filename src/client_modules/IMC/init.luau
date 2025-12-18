@@ -13,12 +13,15 @@
 	InventoryMakerClient (IMC)
 	-----------------------------------------------------------------------------
     v1.3.1 Update Log (12/18/25)
-        - [Fix][Breaking Change]: Correct spelling for what was supposed to be .Initialize() (l0l)
-		- [Fix]: Context menu doesnt block input of the item underneath it. (Fixed by putting context 
-				menus in their own ScreenGuis)
 		- [Changed][Breaking Change]: IMC.Raw() changed to IMC.Items(), which now returns the actual reference to
 				the items instead of a copy. This is so it's the same as IMS's Inventory:Items(). Plus, 
 				IMC.Raw() returning a copy of the items was just pointless and unnecessary, I think, so...
+        - [Changed][Breaking Change]: Correct spelling for what was supposed to be .Initialize() (l0l)
+		- [Fix]: Context menu doesnt block input of the item underneath it. (Fixed by putting context 
+				menus in their own ScreenGuis)
+		- [Fix]: Fixed positioning mistake for hover prompt when out of screen bounds
+			- When out of bounds, the hover prompt will just clamp to the top of the screen, right at the 
+				guiInset if the first constrain doesn't work.
 
     v1.3.0 Update Log (9/29/25)
         - [New Feature]: Static Containers; used to render and interact with static inventories. I made

@@ -699,8 +699,8 @@ function IMContainer.FixedHoverPrompt(container: _Container | _StaticContainer, 
 	
 	prompt.Visible = true
 	if hoverInfo._RENDER_FUNC then
-		local cleanppFunc = hoverInfo._RENDER_FUNC(item, prompt, itemPositionInfo)
-        hoverInfo._RENDER_FUNC_CLEANUP = cleanppFunc
+		local cleanupFunc = hoverInfo._RENDER_FUNC(item, prompt, itemPositionInfo)
+        hoverInfo._RENDER_FUNC_CLEANUP = cleanupFunc
 	end
 	
 	local pos = filledGui.AbsolutePosition
@@ -710,21 +710,27 @@ function IMContainer.FixedHoverPrompt(container: _Container | _StaticContainer, 
 	local hoverOffset = hoverInfo._OFFSET
 	local rightSideX = pos.X + size.X + promptSize.X + hoverOffset.X.Offset
 	
+	local finalPromptPos = prompt.Position
 	if rightSideX > camera.ViewportSize.X then -- position hover prompt on the left side instead
-		prompt.Position = UDim2.fromOffset(pos.X - promptSize.X, pos.Y) - hoverInfo._INSET::UDim2 + UDim2.fromOffset(-hoverOffset.X.Offset, hoverOffset.Y.Offset)
+		finalPromptPos = UDim2.fromOffset(pos.X - promptSize.X, pos.Y) 
+			- hoverInfo._INSET::UDim2 
+			+ UDim2.fromOffset(-hoverOffset.X.Offset, hoverOffset.Y.Offset)
 	else
-		prompt.Position = UDim2.fromOffset(pos.X + size.X, pos.Y) + hoverOffset - hoverInfo._INSET::UDim2
+		finalPromptPos = UDim2.fromOffset(pos.X + size.X, pos.Y) + hoverOffset - hoverInfo._INSET::UDim2
 	end
 	
-	local promptPos = prompt.AbsolutePosition
 	local somePadding = 5
-	local bottomSideY = promptPos.Y + promptSize.Y + Utility.GetGuiInsetY(container._hoverPromptParent.IgnoreGuiInset) + somePadding
-	local viewportY = camera.ViewportSize.Y
+	local ignoreGuiInset = container._hoverPromptParent.IgnoreGuiInset
+	local guiInsetY = Utility.GetGuiInsetY(ignoreGuiInset) 
+	local bottomSideY = finalPromptPos.Y.Offset + promptSize.Y + somePadding + guiInsetY
+	local viewportY = camera.ViewportSize.Y - Utility.GetGuiInsetY(not ignoreGuiInset)
 	
 	if bottomSideY > viewportY then
-		local offset = bottomSideY - (pos.Y + size.Y) - hoverOffset.Y.Offset
-		prompt.Position -= UDim2.new(0, 0, 0, offset)
+		local offset = (promptSize.Y - size.Y) - 1
+		finalPromptPos -= UDim2.new(0, 0, 0, offset)
 	end
+
+	prompt.Position = UDim2.fromOffset(finalPromptPos.X.Offset, math.max(guiInsetY, finalPromptPos.Y.Offset))
 end
 
 function IMContainer.NonFixedHoverPrompt(container: _Container | _StaticContainer, prompt: GuiObject, item: ITEM_TYPE, filledGui: GuiObject, mouse: Vector2, slotIndex: number, containerIndex: number)
@@ -771,6 +777,9 @@ function IMContainer.NonFixedHoverPrompt(container: _Container | _StaticContaine
 		local offset = promptSize.Y
 		prompt.Position -= UDim2.new(0, 0, 0, offset)
 	end
+
+	local finalPos = prompt.Position
+	prompt.Position = UDim2.fromOffset(finalPos.X.Offset, math.max(inset, finalPos.Y.Offset))
 end
 
 function IMContainer.HideHoverPrompt(container: _Container | _StaticContainer, prompt: GuiObject?)
