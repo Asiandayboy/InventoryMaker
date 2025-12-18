@@ -4,12 +4,15 @@
 --[[ InventoryMaker
 
 	Created by: robloxdestroyer1035
-	Version: v1.3.0
-	Last Updated: 9/29/25
+	Version: v1.3.1
+	Last Updated: 12/18/25
 
 	-----------------------------------------------------------------------------
 	InventoryMakerServer (IMS)
 	-----------------------------------------------------------------------------
+	v1.3.1 Update Log (12/18/25)
+		- No updates for IMS
+
     v1.3.0 Update Log (9/29/25)
         - [New Callback]: OnRemove callback for IMS
         - [New Method]: Inventory:GetItem()
@@ -24,17 +27,6 @@
 
     v1.2.1 Update Log (6/8/25)
         - No updates for IMS
-        
-    v1.2.0 Update Log (5/29/25)
-        - [New Method]: Inventory:DefineSwitchValidation()
-        - [New Method]: Inventory:DefineOnSwitched()
-        - [New Feature]: Sorting
-            - [New Method]: Inventory:DefineCustomSorters()
-            - [New Method]: Inventory:Sort()
-            - [New Flag]: IMS.NO_SORTING - disables sorting in the container
-        - [New Method]: IMS.Reset() - resets the inventory's temporary states; MUST be called when character dies and respawns
-        - [Changed]: All the callbacks for stacking confgs now pass in the player as the first argument
-        - [Changed]: :AddItem() now automatically creates a new item, when stackOnAdd = true, if a stack cannot be found 
 
 	-----------------------------------------------------------------------------
 	MIT License

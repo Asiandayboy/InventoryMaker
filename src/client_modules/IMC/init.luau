@@ -6,12 +6,17 @@
 --[[ InventoryMaker
 	
 	Created by: robloxdestroyer1035
-	Version: v1.3.0
-	Last Updated: 9/29/25
+	Version: v1.3.1
+	Last Updated: 12/18/25
 	
 	-----------------------------------------------------------------------------
 	InventoryMakerClient (IMC)
 	-----------------------------------------------------------------------------
+    v1.3.1 Update Log (12/18/25)
+        - [Fix][Breaking Change]: Correct spelling for what was supposed to be .Initialize() (l0l)
+		- [Fix]: Context menu doesnt block input of the item underneath it. (Fixed by putting context 
+				menus in their own ScreenGuis)
+
     v1.3.0 Update Log (9/29/25)
         - [New Feature]: Static Containers; used to render and interact with static inventories. I made
             this primarily to easily render merchant NPCs' inventories that you can sell to and buy from.
@@ -76,71 +81,9 @@
         - [New Method]: IMC.DefineRenderEquippedSlots()
             - [New Method]: Container:DefineRenderEquippedSlot()
             - removed IMC.DefineRenderEquippedSlot() since it did not account for containers
-
-
-
-	v1.1.0 Update Log (5/20/25):
-		- [Bug Fix]: DraggableUI allowed multiple gui objects to be dragged at the same time
-		- [Bug Fix]: Static Context menu overflows vertically when positioned near the bottom of the screen
-		- [Bug Fix]: Static Context menu overflows on the left, even when repositioning after overflowing on the right
-		- [New Method]: Changed left click callback to activated callback
-			- LeftClickCallback --> ActivatedCallback
-			- DefineLeftClick() --> DefineActivatedCallback
-			- DefineLeftClicks() --> DefineActivatedCallbacks
-		- [New Feature]: Mobile Support
-			- Mobile Controls:
-				- Touch and drag .......... dragging & stacking
-				- Long press and drag .....	splitting
-				- Double tap .............. toggle equip item
-				- Touch change ............	show hover prompt
-				- Tap .....................	toggle context menu
-			- Hover Prompt input for mobile
-				- TODO POSSIBLE BUG: input not triggering sometimes
-				- If you do encounter this bug on mobile, please LMK (or try to fix it and let me know, if u want ofc, 👍)
-			- Context menu input for mobile
-				- TODO POSSIBLE BUG: input not triggering sometimes
-				- If you do encounter this bug on mobile, please LMK (or try to fix it and let me know, if u want ofc, 👍)
-			- Modules affected:
-				- New Module: IMInput
-				- DraggableUI
-				- IMContainer
-				
-	
-	v1.0.0 Update Log:
-		- [Bug Fix]: Custom filters not automatically cleared when inventory is toggled off
-		- [Bug Fix]: Return type for .Raw() not correct
-		- [Bug Fix]: FillHotbarFirst flag bug resulting in max iterations warning
-		- [Bug Fix]: Hover Prompt not disappearing when an item is removed as it's being hovered
-		- [Bug Fix]: Hover prompt shifting into some fixed position when an item is clicked while inventory is toggled on
-		- [Bug Fix]: Equipped state not refreshed when the equipped item is switched as item2
-		- [Bug Fix]: Container capacity not accounted for with AddItem()
-		- [Bug Fix]: Hotbar collapses when removing an item while inventory is toggled on
-		- [Bug Fix]: leftover container search not breaking right away when an available container is found for stackOnAddItem() 
-		- [Bug Fix]: AddItem returning early when encountering a container that doesn't allow the new item
-		- [Bug Fix]: Algorithm for .IncreaseCapacity() was incorrect (whoops LMAO)
-		- [New Feature]: NO_AUTO_EQUIP flag: disables the auto-equipping feature for a container when a new item is added with AddItem()
-		- [New Feature]: NO_EQUIPPED_STATE flag: disables the equipped state for a container, preventing all items in the container from being "equipped"
-			- if an equipped item is moved into a container with this flag enabled, the item is unequipped.
-		- [New Feature]: Itemspace - read .Build() for more details.
-		- [New Method]: .GetEquippedItem()
-		- [New Method]: .SetHotbarKeybinds() - allows keybind changes after the inventory has been built
-			- renamed container method :SetHotbarKeybinds() to :SetHotbarConfigs()
-		- [New Container Method]: DefineOnItemAddedCallback() - A callback that gets run when an item is added to a container
-			- New Method: .DefineOnItemAddedCallbacks()
-			- removed callback param in AddItem()
-		- [New Container Method]: :DefineAllowedItems() - define what type of items are allowed in a container
-			- New Method: .DefineAllowedItems()
-		- [New Method]: .DefineOnDraggedOutCallback() - a callback that gets run when an item is dragged out of a container into empty space on the screen
-		- [New Method]: .DecreaseCapacity()
-		- [New Method]: .DefineOnSizeChangedCallback()
-		- IMS (InventoryMakerServer): A Server Component for InventoryMaker
 		
 	-----------------------------------------------------------------------------
 	TODO-[KNOWN-BUGS]:	
-	- (this is kind of a bug??) context menu doesnt block input of the item underneath it. Need to somehow make gui below uninteractable
-		- solution 1? when opening a context menu, loop thru all the slots and make interactable = false. Then set it back when the menu closes
-		- solution 2? don't allow dragging when a context menu is open
-		- solution 3? getUIS at mouse position and detect if there is another filledgui underneath the context menu.....nah
 
 	-----------------------------------------------------------------------------
 	TODO-[FEATURES-TO-BE-ADDED]
@@ -1012,6 +955,18 @@ local function closeAllContextMenusAndHoverPrompts(props: _InventoryMakerProps)
 	setActiveSlot(props, nil)
 end
 
+local function setContextMenuParent(mainScreenGui: ScreenGui, contextMenuGui: GuiObject)
+	local p = Instance.new("ScreenGui")
+	p.Name = contextMenuGui.Name
+	p.ResetOnSpawn = false
+	p.IgnoreGuiInset = mainScreenGui.IgnoreGuiInset
+	p.DisplayOrder = 100
+	p.Parent = player.PlayerGui
+
+	contextMenuGui.Active = true
+	contextMenuGui.Parent = p
+end
+
 local function openHoveredContextMenu(props: _InventoryMakerProps, container: IMContainer._Container, menuIndex: number, boundingGui: GuiObject)
 	if IMInput.GetInputType() == IMInput.INPUT_TOUCH then error("[InventoryMaker]: Hovered context menus are disabled on mobile.") end
 	if props._CONTEXT_MENU_MODE ~= MULTI_CONTEXT_MENU_MODE then error("[InventoryMaker]: Multi-context mode is required to opened a hovered context menu.") end
@@ -1063,8 +1018,6 @@ local function openHoveredContextMenu(props: _InventoryMakerProps, container: IM
 	local anchorFromTopOffset = boundingGui.AbsolutePosition.Y + guiInsetY - HOVERED_BOUNDING_BOX_BOUNDING_GUI_PADDING
 	local anchorFromBotOffset = anchorFromTopOffset - contextMenuGui.AbsoluteSize.Y + (boundingGui.AbsoluteSize.Y + HOVERED_BOUNDING_BOX_BOUNDING_GUI_PADDING*2)
 	local contextMenuPos = UDim2.new(0, lastPos.X + lastSize.X, 0, anchorFromBotOffset) + UDim2.fromOffset(userOffset.X, userOffset.Y)
-	contextMenuGui.ZIndex = 100
-	contextMenuGui.Visible = true
 	
 	local menuSize = contextMenuGui.AbsoluteSize
 	local promptSize = hoverPrompt and hoverPrompt.AbsoluteSize or Vector2.zero
@@ -1082,7 +1035,11 @@ local function openHoveredContextMenu(props: _InventoryMakerProps, container: IM
 
 
 	contextMenuGui.Position = contextMenuPos
-	contextMenuGui.Parent = props._PARENT_CONTAINER_SCREEN_GUI
+	contextMenuGui.Visible = true
+
+	if contextMenuGui.Parent == nil then
+		setContextMenuParent(props._PARENT_CONTAINER_SCREEN_GUI, contextMenuGui)
+	end
 
 	if hoverInfo and props._SHOW_HOVER_PROMPT_NEXT_TO_MENU and hoverPrompt then
 		if leftAlign then
@@ -1238,9 +1195,7 @@ local function openStaticContextMenu(props: _InventoryMakerProps, container: IMC
 	local contextMenuPos: UDim2 = UDim2.new(0, guiPos.X + guiSize.X, 0, guiPos.Y + guiInsetY) + userOffsetUDim2
 	local contextMenuGui = contextMenuInfo._GUI
 	local cleanupRenderFunc = contextMenuInfo._RENDER_FUNC(slotIndex, item, contextMenuGui, filledGui, containerName)
-	contextMenuGui.ZIndex = 100
-	contextMenuGui.Visible = true
-	
+
 	
 	local menuSize = contextMenuGui.AbsoluteSize
 	local rightSideX = contextMenuPos.X.Offset + promptSize.X + menuSize.X
@@ -1262,7 +1217,11 @@ local function openStaticContextMenu(props: _InventoryMakerProps, container: IMC
 	
 
 	contextMenuGui.Position = contextMenuPos
-	contextMenuGui.Parent = props._PARENT_CONTAINER_SCREEN_GUI
+	contextMenuGui.Visible = true
+
+	if contextMenuGui.Parent == nil then
+		setContextMenuParent(props._PARENT_CONTAINER_SCREEN_GUI, contextMenuGui)
+	end
 	
 	-- position hover prompt next to context menu on the right (not overflowed) or left (overflowed)
 	if hoverInfo and props._SHOW_HOVER_PROMPT_NEXT_TO_MENU and hoverPrompt then
@@ -2256,7 +2215,7 @@ end
 	Takes in a ScreenGui. This screen gui will be used to contain EVERY UI element
 	of your inventory.
 ]]
-function InventoryMaker.Initalize(screenGui: ScreenGui)
+function InventoryMaker.Initialize(screenGui: ScreenGui)
 	if not screenGui or not screenGui:IsA("ScreenGui") then 
 		error("[InventoryMaker]: A ScreenGui is required to initalize the inventory. This single ScreenGui will be used to contain all UI elements.", 2) 
 	end
