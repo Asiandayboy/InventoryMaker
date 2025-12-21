@@ -5,12 +5,12 @@
 
 	Created by: robloxdestroyer1035
 	Version: v1.3.1
-	Last Updated: 12/18/25
+	Last Updated: 12/21/25
 
 	-----------------------------------------------------------------------------
 	InventoryMakerServer (IMS)
 	-----------------------------------------------------------------------------
-	v1.3.1 Update Log (12/18/25)
+	v1.3.1 Update Log (12/21/25)
 		- No updates for IMS
 
     v1.3.0 Update Log (9/29/25)

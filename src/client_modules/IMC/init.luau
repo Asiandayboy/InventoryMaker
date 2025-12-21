@@ -7,12 +7,12 @@
 	
 	Created by: robloxdestroyer1035
 	Version: v1.3.1
-	Last Updated: 12/18/25
+	Last Updated: 12/21/25
 	
 	-----------------------------------------------------------------------------
 	InventoryMakerClient (IMC)
 	-----------------------------------------------------------------------------
-    v1.3.1 Update Log (12/18/25)
+    v1.3.1 Update Log (12/21/25)
 		- [Changed][Breaking Change]: IMC.Raw() changed to IMC.Items(), which now returns the actual reference to
 				the items instead of a copy. This is so it's the same as IMS's Inventory:Items(). Plus, 
 				IMC.Raw() returning a copy of the items was just pointless and unnecessary, I think, so...
@@ -22,6 +22,8 @@
 		- [Fix]: Fixed positioning mistake for hover prompt when out of screen bounds
 			- When out of bounds, the hover prompt will just clamp to the top of the screen, right at the 
 				guiInset if the first constrain doesn't work.
+		- [Fix]: Fix positioning of context menus and hover prompts that appear with context menus so that 
+			they are constrained within screen
 
     v1.3.0 Update Log (9/29/25)
         - [New Feature]: Static Containers; used to render and interact with static inventories. I made
@@ -360,6 +362,8 @@ export type RemoteCallbacks = {
 local _inventoryMakerProps: _InventoryMakerProps
 local charDead = false
 local initialized = false
+
+local SOME_ARBITRARY_SMALL_PADDING = 5
 
 local IMS: { _CALLBACKS: RemoteCallbacks? } = {
 	_CALLBACKS = nil::RemoteCallbacks?
@@ -1032,11 +1036,13 @@ local function openHoveredContextMenu(props: _InventoryMakerProps, container: IM
 	
 	local rightSideX = ((lastPos.X <= contextMenuPos.X.Offset) and lastPos.X or lastPos.X*2) 
 		+ lastSize.X + userOffset.X + menuSize.X + promptOffset.X.Offset + promptSize.X
-	local leftAlign = rightSideX > camera.ViewportSize.X
+	local rightSideOverflow = rightSideX > camera.ViewportSize.X
 	
-	if leftAlign then
-		contextMenuPos = UDim2.new(0, lastPos.X - contextMenuGui.AbsoluteSize.X, 0, anchorFromBotOffset) 
-			+ UDim2.fromOffset(-userOffset.X, userOffset.Y)
+	if rightSideOverflow then
+		contextMenuPos = UDim2.fromOffset(
+			math.max(SOME_ARBITRARY_SMALL_PADDING, lastPos.X - contextMenuGui.AbsoluteSize.X + (-userOffset.X)),
+			anchorFromBotOffset + userOffset.Y
+		) 
 	end
 
 
@@ -1047,11 +1053,24 @@ local function openHoveredContextMenu(props: _InventoryMakerProps, container: IM
 		setContextMenuParent(props._PARENT_CONTAINER_SCREEN_GUI, contextMenuGui)
 	end
 
+
 	if hoverInfo and props._SHOW_HOVER_PROMPT_NEXT_TO_MENU and hoverPrompt then
-		if leftAlign then
-			hoverPrompt.Position = contextMenuPos - UDim2.new(0, promptSize.X, 0, 0) + UDim2.fromOffset(-promptOffset.X.Offset, promptOffset.Y.Offset)
+		if rightSideOverflow then
+			local finalPos = contextMenuPos 
+				- UDim2.fromOffset(
+					promptSize.X + promptOffset.X.Offset,
+					promptOffset.Y.Offset
+				) 
+
+			if finalPos.X.Offset < 0 then
+				-- position hover prompt on top of context menu instead
+				-- the +12 is an abitrary margin that I think looks good
+				finalPos = contextMenuPos - UDim2.fromOffset(0, (promptSize.Y + 12) + promptOffset.Y.Offset)
+			end
+			hoverPrompt.Position = finalPos
 		else
-			hoverPrompt.Position = contextMenuPos + UDim2.new(0, contextMenuGui.AbsoluteSize.X, 0, 0) + hoverInfo._OFFSET
+			hoverPrompt.Position = contextMenuPos 
+				+ UDim2.new(0, contextMenuGui.AbsoluteSize.X, 0, 0) + hoverInfo._OFFSET
 		end
 	end
 	
@@ -1061,19 +1080,19 @@ local function openHoveredContextMenu(props: _InventoryMakerProps, container: IM
 		A context menu will only ever store 4 bounding boxes--2 for its own and 2 for its child.
 	]]
 	
-	local _ 			= #props._contextMenusStack
+	local _ 						= #props._contextMenusStack
 	local lastGui 					= props._USER_CONTEXT_MENUS[getLastOpenedMenuIndex(props)]._GUI
 	local lastPos, lastSize 		= lastGui.AbsolutePosition, lastGui.AbsoluteSize
-	local _, heightA 			= lastSize.X, boundingGui.AbsoluteSize.Y
+	local _, heightA 				= lastSize.X, boundingGui.AbsoluteSize.Y
 	local widthB, heightB 			= contextMenuGui.AbsoluteSize.X, contextMenuGui.AbsoluteSize.Y
 	local topLeftAx, topLeftAy 		= lastPos.X, anchorFromTopOffset
 	local botRightAx, botRightAy 	= topLeftAx + lastSize.X, topLeftAy + heightA + HOVERED_BOUNDING_BOX_BOUNDING_GUI_PADDING*2
 	local boundingBoxes = {
 		{ topLeftAx, topLeftAy, botRightAx+userOffset.X, botRightAy },
 		{ 
-			contextMenuPos.X.Offset - (not leftAlign and (userOffset.X + HOVERED_BOUNDING_BOX_SIDE_PADDING) or 0), 
+			contextMenuPos.X.Offset - (not rightSideOverflow and (userOffset.X + HOVERED_BOUNDING_BOX_SIDE_PADDING) or 0), 
 			contextMenuPos.Y.Offset, 
-			contextMenuPos.X.Offset+widthB + (leftAlign and (userOffset.X + HOVERED_BOUNDING_BOX_SIDE_PADDING) or 0), 
+			contextMenuPos.X.Offset+widthB + (rightSideOverflow and (userOffset.X + HOVERED_BOUNDING_BOX_SIDE_PADDING) or 0), 
 			contextMenuPos.Y.Offset+heightB 
 		}
 	}
@@ -1124,14 +1143,24 @@ local function openHoveredContextMenu(props: _InventoryMakerProps, container: IM
 		cleanupRenderFunc()
 		if onFirstHoveredCleanup then onFirstHoveredCleanup() end
 		
-		if container._HOVER_INFO and props._SHOW_HOVER_PROMPT_NEXT_TO_MENU then
+		local hoverInfo = container._HOVER_INFO
+		if hoverInfo and props._SHOW_HOVER_PROMPT_NEXT_TO_MENU then
 			local hoverPrompt = IMContainer.GetHoverPromptSingleton(container, props._PARENT_CONTAINER_SCREEN_GUI)
 			if not hoverPrompt then return end
-			if leftAlign then
-				hoverPrompt.Position = UDim2.new(0, lastPos.X - promptSize.X, 0, lastPos.Y + guiInsetY) 
-					+ UDim2.fromOffset(-promptOffset.X.Offset, promptOffset.Y.Offset)
+
+			local lastRightSide = lastPos.X + promptSize.X + lastSize.X + promptOffset.X.Offset
+			local lastRightSideOverflow = lastRightSide > camera.ViewportSize.X
+
+			if lastRightSideOverflow then
+				hoverPrompt.Position = UDim2.fromOffset(
+					lastPos.X - promptSize.X + (-promptOffset.X.Offset),
+					lastPos.Y + guiInsetY + promptOffset.Y.Offset
+				) 
 			else
-				hoverPrompt.Position = UDim2.new(0, lastPos.X + lastGui.AbsoluteSize.X, 0, lastPos.Y + guiInsetY) + container._HOVER_INFO._OFFSET
+				hoverPrompt.Position = UDim2.fromOffset(
+					lastPos.X + lastGui.AbsoluteSize.X,
+					lastPos.Y + guiInsetY
+				) + promptOffset
 			end
 		end
 	end
@@ -1208,17 +1237,22 @@ local function openStaticContextMenu(props: _InventoryMakerProps, container: IMC
 	local rightSideOverflow = rightSideX > camera.ViewportSize.X
 
 	if rightSideOverflow then
-		contextMenuPos = UDim2.fromOffset(guiPos.X - menuSize.X, guiPos.Y + guiInsetY) 
-			+ UDim2.fromOffset(-userOffset.X, userOffset.Y)
+		contextMenuPos = UDim2.fromOffset(
+			math.max(SOME_ARBITRARY_SMALL_PADDING, guiPos.X - menuSize.X + (-userOffset.X)), 
+			guiPos.Y + guiInsetY + userOffset.Y
+		) 
 	end
 	
     local inset = IMUtility.GetGuiInsetY(not props._PARENT_CONTAINER_SCREEN_GUI.IgnoreGuiInset)
 	local bottomSideY = contextMenuPos.Y.Offset + menuSize.Y + inset
-	local bottomSideOverflow = bottomSideY > camera.ViewportSize.Y
+	local maxY = camera.ViewportSize.Y
+	local bottomSideOverflow = bottomSideY > maxY
 	
 	if bottomSideOverflow then
-		contextMenuPos = UDim2.fromOffset(contextMenuPos.X.Offset, guiPos.Y + guiInsetY - menuSize.Y + guiSize.Y) 
-			+ UDim2.fromOffset(-userOffset.X, userOffset.Y)
+		contextMenuPos = UDim2.fromOffset(
+			contextMenuPos.X.Offset, 
+			contextMenuPos.Y.Offset - (bottomSideY - maxY) - SOME_ARBITRARY_SMALL_PADDING
+		) 
 	end
 	
 
