@@ -1233,7 +1233,7 @@ local function openStaticContextMenu(props: _InventoryMakerProps, container: IMC
 
 	
 	local menuSize = contextMenuGui.AbsoluteSize
-	local rightSideX = contextMenuPos.X.Offset + promptSize.X + menuSize.X
+	local rightSideX = contextMenuPos.X.Offset + menuSize.X + promptSize.X
 	local rightSideOverflow = rightSideX > camera.ViewportSize.X
 
 	if rightSideOverflow then
@@ -1265,19 +1265,26 @@ local function openStaticContextMenu(props: _InventoryMakerProps, container: IMC
 	
 	-- position hover prompt next to context menu on the right (not overflowed) or left (overflowed)
 	if hoverInfo and props._SHOW_HOVER_PROMPT_NEXT_TO_MENU and hoverPrompt then
+		local promptOffset = hoverInfo._OFFSET
+
 		if rightSideOverflow then
 			hoverPrompt.Position = contextMenuPos - UDim2.new(0, promptSize.X, 0, 0) + 
-				UDim2.fromOffset(-hoverInfo._OFFSET.X.Offset, hoverInfo._OFFSET.Y.Offset)
+				UDim2.fromOffset(-promptOffset.X.Offset, promptOffset.Y.Offset)
 		else
-			hoverPrompt.Position = contextMenuPos + UDim2.new(0, contextMenuGui.AbsoluteSize.X, 0, 0) + hoverInfo._OFFSET
+			hoverPrompt.Position = contextMenuPos 
+				+ UDim2.new(0, contextMenuGui.AbsoluteSize.X, 0, 0) 
+				+ promptOffset
 		end
 		
 		if rightSideOverflow then
 			local leftSideX = hoverPrompt.Position.X.Offset
 			local leftSideOverflow = leftSideX < 0
 			if leftSideOverflow then
-				-- if the hoverprompt overflows on the left side too, position it back to the right side of the menu
-				hoverPrompt.Position = contextMenuPos + UDim2.new(0, contextMenuGui.AbsoluteSize.X, 0, 0) + hoverInfo._OFFSET
+				-- if the hoverprompt overflows on the left side too, 
+				-- position it on top of the context menu instead
+				-- the +12 is an abitrary margin that I think looks good
+				hoverPrompt.Position = contextMenuPos 
+					- UDim2.fromOffset(0, (promptSize.Y + 12) + promptOffset.Y.Offset)
 			end
 		end
 	end
